@@ -27,20 +27,26 @@ the Windows language (it can be set under **Settings** ⚙ › Language).
 - **Real isolation**: each account has its own browser profile folder. Log
   in to two accounts of the same game at the same time, no private window
   needed, and one never logs the other out
-- **One process per account**: each account runs in its own browser
-  process; if one crashes, the others keep going
-- **One at a time or in a grid**: the grid adapts to the window size (or
-  pick the number of columns). **Drag an account from the list onto a grid
-  cell** to put it there
+- **Economy mode** (on by default): one browser shared by all accounts,
+  each one in its own profile - about 40% less memory. Turn it off under
+  **Settings** to give each account its own browser process (if one
+  crashes, the others keep going)
+- **One at a time or in a grid**: automatic grid that adapts to the window,
+  or a fixed shape (side by side, stacked, 2×2, 3×2, 3×3… or any columns ×
+  rows). **Drag an account from the list onto a grid cell** to put it there;
+  the grid can also show a single group
+- **Groups** in the side list: collapse/expand, drag accounts into them,
+  open or pause a whole group at once
 - **Focus mode** (F11): hides the list and the bar, only the game remains.
   F11 or Esc brings everything back
-- **CPU and memory** of each account (in the list and on the grid cell) and
-  the **total** (bottom of the list; hover it to see accounts × interface)
+- **CPU and RAM** of each account (in the list and on the grid cell), of
+  each group (hover its name) and the **total** (bottom of the list; hover
+  it for details). GPU is not measured
 - **Sound and zoom per account**: mute one, zoom another (also with
   Ctrl+wheel inside the page). The 🔊 icon shows which one is playing sound
 - **Address bar** with back, forward and reload: just paste the URL of any
   game
-- **Favorite, rename, reorder** (by dragging in the list)
+- **Favorite, rename, reorder** (drag in the list)
 - **Pause** an account to close its page and free its memory; when opened
   again it is still logged in
 - **Clear data** (log out) starts the account fresh without removing it
@@ -51,6 +57,10 @@ the Windows language (it can be set under **Settings** ⚙ › Language).
 
 ### Saving resources
 
+- **Economy mode** shares the browser, GPU and network processes among the
+  accounts: with 5 accounts, 21 processes and ~1.5 GB instead of 41 and
+  ~2.7 GB. Each mode keeps its own logins, so after switching modes log in
+  to the games once again
 - Pages that are off screen (another account selected, a menu on top)
   **stop drawing** and WebView2 is told to **use less memory**, while the
   game keeps running

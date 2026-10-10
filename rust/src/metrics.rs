@@ -26,8 +26,9 @@ pub struct Usage {
 
 #[derive(Clone, Default)]
 pub struct Metrics {
-    /// account id -> browser process id
-    watch: Arc<Mutex<HashMap<String, u32>>>,
+    /// account id -> processes whose trees belong to it (its browser, or
+    /// its page processes in economy mode)
+    watch: Arc<Mutex<HashMap<String, Vec<u32>>>>,
     results: Arc<Mutex<HashMap<String, Usage>>>,
 }
 
@@ -47,8 +48,13 @@ impl Metrics {
                     sys.refresh_processes(ProcessesToUpdate::All, true);
                     let tree = children(&sys);
                     let mut out = HashMap::new();
-                    for (id, pid) in pids {
-                        let mut u = sum_tree(&sys, &tree, Pid::from_u32(pid));
+                    for (id, roots) in pids {
+                        let mut u = Usage::default();
+                        for pid in roots {
+                            let t = sum_tree(&sys, &tree, Pid::from_u32(pid));
+                            u.cpu += t.cpu;
+                            u.memory += t.memory;
+                        }
                         u.cpu = (u.cpu / cpus).min(100.0);
                         out.insert(id, u);
                     }
@@ -61,7 +67,7 @@ impl Metrics {
         m
     }
 
-    pub fn set_watch(&self, pids: HashMap<String, u32>) {
+    pub fn set_watch(&self, pids: HashMap<String, Vec<u32>>) {
         *self.watch.lock().unwrap() = pids;
     }
 

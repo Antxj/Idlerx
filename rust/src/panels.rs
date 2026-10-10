@@ -4,6 +4,11 @@
 //! separate browser process for it, with its own cookies, cache, storage and
 //! logins. If one account crashes, the others keep running.
 //!
+//! Economy mode: one browser (a shared folder) with one WebView2 profile per
+//! account. Cookies, cache and logins stay separate, but the browser, GPU and
+//! network processes are shared - less memory, and a crash there takes every
+//! account down. Each account still has its own page (renderer) processes.
+//!
 //! Opening is fully asynchronous ([`open`]): the browser environment and then
 //! the page are created through WebView2 callbacks, delivered by the normal
 //! window message loop. Nothing waits in a nested message loop - creating
@@ -12,13 +17,14 @@
 use crate::config::{self, Account};
 use eframe::egui;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Instant;
 use webview2_com::Microsoft::Web::WebView2::Win32::*;
 use webview2_com::{
     take_pwstr, AcceleratorKeyPressedEventHandler, CoreWebView2EnvironmentOptions,
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
-    FocusChangedEventHandler,
+    FocusChangedEventHandler, GetProcessExtendedInfosCompletedHandler,
 };
 use windows::Win32::Foundation::{HWND, RECT};
 use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
@@ -60,11 +66,16 @@ pub fn open(
     parent: isize,
     account: &Account,
     keep_active: bool,
+    economy: bool,
     dark: bool,
     ready: impl Fn() + 'static,
 ) -> PanelSlot {
     let slot: PanelSlot = Rc::new(RefCell::new(None));
-    let dir = config::profile_dir(&account.profile);
+    let dir = if economy {
+        config::shared_dir()
+    } else {
+        config::profile_dir(&account.profile)
+    };
     let _ = std::fs::create_dir_all(&dir);
     let options = CoreWebView2EnvironmentOptions::default();
     unsafe { options.set_additional_browser_arguments(browser_args(keep_active)) };
@@ -85,6 +96,8 @@ pub fn open(
                 }
             };
             let s2 = s.clone();
+            let env2 = env.clone();
+            let profile = account.profile.clone();
             let controller_done = CreateCoreWebView2ControllerCompletedHandler::create(Box::new(
                 move |res, controller| {
                     let r = res
@@ -93,16 +106,31 @@ pub fn open(
                             controller.ok_or_else(|| "WebView2 returned no page".to_string())
                         })
                         .and_then(|c| {
-                            Panel::setup(c, parent, &account, dark).map_err(|e| e.to_string())
+                            Panel::setup(c, &env2, parent, &account, dark)
+                                .map_err(|e| e.to_string())
                         });
                     *s2.borrow_mut() = Some(r);
                     ready();
                     Ok(())
                 },
             ));
-            if let Err(e) =
-                unsafe { env.CreateCoreWebView2Controller(HWND(parent as _), &controller_done) }
-            {
+            let created = unsafe {
+                if economy {
+                    // the account is a named profile inside the shared browser
+                    env.cast::<ICoreWebView2Environment10>().and_then(|env10| {
+                        let opts = env10.CreateCoreWebView2ControllerOptions()?;
+                        opts.SetProfileName(&HSTRING::from(profile.as_str()))?;
+                        env10.CreateCoreWebView2ControllerWithOptions(
+                            HWND(parent as _),
+                            &opts,
+                            &controller_done,
+                        )
+                    })
+                } else {
+                    env.CreateCoreWebView2Controller(HWND(parent as _), &controller_done)
+                }
+            };
+            if let Err(e) = created {
                 *s.borrow_mut() = Some(Err(e.to_string()));
             }
             Ok(())
@@ -125,6 +153,7 @@ pub fn open(
 pub struct Panel {
     controller: ICoreWebView2Controller,
     webview: ICoreWebView2,
+    env: ICoreWebView2Environment,
     parent: isize,
     pub started: Instant,
     /// Browser process (root of the account's process tree).
@@ -147,6 +176,7 @@ impl Panel {
     /// navigation.
     fn setup(
         controller: ICoreWebView2Controller,
+        env: &ICoreWebView2Environment,
         parent: isize,
         account: &Account,
         dark: bool,
@@ -208,6 +238,7 @@ impl Panel {
             let p = Panel {
                 controller,
                 webview,
+                env: env.clone(),
                 parent,
                 started: Instant::now(),
                 pid,
@@ -344,6 +375,76 @@ impl Panel {
         unsafe { SetFocus(self.parent) };
     }
 
+    /// Id of the page's main frame (to find its processes in economy mode).
+    pub fn main_frame_id(&self) -> Option<u32> {
+        let w = self.webview.cast::<ICoreWebView2_20>().ok()?;
+        let mut id = 0u32;
+        unsafe { w.FrameId(&mut id) }.ok()?;
+        Some(id)
+    }
+
+    /// Asks the browser which page processes serve each main frame: fills
+    /// `out` with main frame id -> process ids (asynchronously).
+    pub fn request_renderers(
+        &self,
+        out: Rc<RefCell<HashMap<u32, Vec<u32>>>>,
+        ready: impl Fn() + 'static,
+    ) {
+        let Ok(env13) = self.env.cast::<ICoreWebView2Environment13>() else {
+            return;
+        };
+        let handler =
+            GetProcessExtendedInfosCompletedHandler::create(Box::new(move |res, list| {
+                if res.is_err() {
+                    return Ok(());
+                }
+                let Some(list) = list else { return Ok(()) };
+                let mut map: HashMap<u32, Vec<u32>> = HashMap::new();
+                unsafe {
+                    let mut n = 0u32;
+                    list.Count(&mut n)?;
+                    for i in 0..n {
+                        let Ok(info) = list.GetValueAtIndex(i) else {
+                            continue;
+                        };
+                        let mut pid = 0i32;
+                        let mut kind = Default::default();
+                        if let Ok(p) = info.ProcessInfo() {
+                            let _ = p.ProcessId(&mut pid);
+                            let _ = p.Kind(&mut kind);
+                        }
+                        if kind != COREWEBVIEW2_PROCESS_KIND_RENDERER || pid <= 0 {
+                            continue;
+                        }
+                        let Ok(frames) = info.AssociatedFrameInfos() else {
+                            continue;
+                        };
+                        let Ok(it) = frames.GetIterator() else {
+                            continue;
+                        };
+                        let mut has = BOOL(0);
+                        while it.HasCurrent(&mut has).is_ok() && has.as_bool() {
+                            if let Ok(f) = it.GetCurrent() {
+                                if let Some(top) = top_frame_id(f) {
+                                    let e = map.entry(top).or_default();
+                                    if !e.contains(&(pid as u32)) {
+                                        e.push(pid as u32);
+                                    }
+                                }
+                            }
+                            if it.MoveNext(&mut has).is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                *out.borrow_mut() = map;
+                ready();
+                Ok(())
+            }));
+        let _ = unsafe { env13.GetProcessExtendedInfos(&handler) };
+    }
+
     /// The page got the keyboard focus since the last call.
     pub fn take_got_focus(&self) -> bool {
         self.got_focus.replace(false)
@@ -352,6 +453,23 @@ impl Panel {
     pub fn take_hotkey(&self) -> Option<Hotkey> {
         self.hotkey.take()
     }
+}
+
+/// Id of the main frame a frame belongs to (iframes and ads included).
+fn top_frame_id(frame: ICoreWebView2FrameInfo) -> Option<u32> {
+    let mut f = frame.cast::<ICoreWebView2FrameInfo2>().ok()?;
+    for _ in 0..64 {
+        match unsafe { f.ParentFrameInfo() } {
+            Ok(parent) => match parent.cast::<ICoreWebView2FrameInfo2>() {
+                Ok(p) => f = p,
+                Err(_) => break,
+            },
+            Err(_) => break,
+        }
+    }
+    let mut id = 0u32;
+    unsafe { f.FrameId(&mut id) }.ok()?;
+    Some(id)
 }
 
 /// Installed WebView2 Runtime version (Err when it is missing).

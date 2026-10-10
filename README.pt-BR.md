@@ -27,15 +27,21 @@ Windows (dá para fixar em **Configurações** ⚙ › Idioma).
 - **Isolamento de verdade**: cada conta tem a própria pasta de perfil do
   navegador. Dá para logar em duas contas do mesmo jogo ao mesmo tempo, sem
   aba anônima, e uma nunca derruba a outra
-- **Um processo por conta**: cada conta roda no seu próprio processo do
-  navegador; se uma travar, as outras seguem funcionando
-- **Uma por vez ou em grade**: a grade se ajusta sozinha ao tamanho da
-  janela (ou escolha o número de colunas). **Arraste uma conta da lista até
-  um quadro** da grade para colocá-la ali
+- **Modo econômico** (ligado por padrão): um navegador compartilhado por
+  todas as contas, cada uma no seu perfil, gastando cerca de 40% menos
+  memória. Desligue em **Configurações** para cada conta ter o próprio
+  processo de navegador (se uma travar, as outras seguem funcionando)
+- **Uma por vez ou em grade**: grade automática que se ajusta à janela, ou
+  um formato fixo (lado a lado, empilhado, 2×2, 3×2, 3×3… ou quaisquer
+  colunas × linhas). **Arraste uma conta da lista até um quadro** da grade
+  para colocá-la ali; a grade também pode mostrar só um grupo
+- **Grupos** na lista: recolher/expandir, arrastar contas para dentro,
+  abrir ou pausar o grupo inteiro de uma vez
 - **Modo foco** (F11): some com a lista e a barra, fica só o jogo. F11 ou Esc
   traz tudo de volta
-- **CPU e memória** de cada conta (na lista e no quadro da grade) e o
-  **total** (rodapé da lista; passe o mouse para ver contas × interface)
+- **CPU e RAM** de cada conta (na lista e no quadro da grade), de cada
+  grupo (passe o mouse no nome) e o **total** (rodapé da lista; passe o
+  mouse para ver os detalhes). A GPU não é medida
 - **Áudio e zoom por conta**: silencie uma, dê zoom em outra (também com
   Ctrl+roda do mouse dentro da página). O ícone 🔊 mostra quem está tocando som
 - **Barra de endereço** com voltar, avançar e recarregar: é só colar a URL de
@@ -51,6 +57,10 @@ Windows (dá para fixar em **Configurações** ⚙ › Idioma).
 
 ### Economia de recursos
 
+- O **modo econômico** compartilha os processos de navegador, GPU e rede
+  entre as contas: com 5 contas, 21 processos e ~1,5 GB em vez de 41 e
+  ~2,7 GB. Cada modo guarda os logins separadamente: ao trocar de modo,
+  entre nos jogos de novo uma vez
 - Páginas fora da tela (outra conta selecionada, menu por cima) **param de
   desenhar** e o WebView2 é instruído a **usar menos memória**, mas o jogo
   continua rodando

@@ -5,7 +5,7 @@
 //! always cover anything egui paints in their area. Whenever egui needs that
 //! area (a dialog or a menu is open) every page is hidden for the moment.
 
-use crate::config::{self, Account, Config, Layout, Theme};
+use crate::config::{self, Account, Config, Group, Layout, Theme};
 use crate::metrics::{self, Metrics};
 use crate::panels::{self, Hotkey, Panel};
 use crate::{i18n, update};
@@ -13,7 +13,9 @@ use eframe::egui::{
     self, text::LayoutJob, Align, Align2, Color32, CornerRadius, FontId, Key, Margin, Pos2, Rect,
     RichText, Sense, Stroke, StrokeKind, TextFormat, Vec2,
 };
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
@@ -23,6 +25,9 @@ const ONLINE: Color32 = Color32::from_rgb(0x22, 0xc5, 0x5e);
 const DANGER: Color32 = Color32::from_rgb(0xef, 0x44, 0x44);
 const SIDEBAR_WIDTH: f32 = 272.0;
 const ROW_HEIGHT: f32 = 52.0;
+const GROUP_HEIGHT: f32 = 30.0;
+/// Indentation of the accounts inside a group.
+const GROUP_INDENT: f32 = 10.0;
 const CELL_HEADER: f32 = 28.0;
 const GRID_GAP: f32 = 4.0;
 const POLL: Duration = Duration::from_secs(1);
@@ -52,6 +57,21 @@ enum Action {
     /// Moves the first account to the place of the second one (and shows it
     /// in the grid).
     MoveTo(String, String),
+    /// Reorders in the side list (the account is not opened).
+    Reorder(String, String),
+    /// Opens the account and puts it in the grid right after another one
+    /// (an empty grid cell); None = the grid is empty.
+    PlaceAfter(String, Option<String>),
+    MoveToGroup(String, Option<String>),
+    /// Asks the name of a new group; the account (if any) goes into it.
+    NewGroup(Option<String>),
+    RenameGroup(String),
+    DeleteGroup(String),
+    ToggleCollapse(String),
+    OpenGroup(String),
+    PauseGroup(String),
+    /// Grid shows only this group (None = all accounts).
+    GridGroup(Option<String>),
     /// Shows only this account (Tabs layout).
     Expand(String),
     NewAccount,
@@ -65,8 +85,17 @@ struct EditState {
     error: Option<String>,
 }
 
+struct GroupEdit {
+    /// None = new group.
+    id: Option<String>,
+    name: String,
+    /// Account that goes into the new group.
+    assign: Option<String>,
+}
+
 enum Dialog {
     Edit(EditState),
+    Group(GroupEdit),
     Settings,
     Update,
     ConfirmRemove(String),
@@ -84,6 +113,14 @@ pub struct App {
     starting: Option<(String, panels::PanelSlot)>,
     /// Main window (parent of the pages).
     hwnd: isize,
+    /// Economy mode and background setting in effect (they apply to the
+    /// shared browser, so only change on restart).
+    economy: bool,
+    keep_active: bool,
+    /// "Restart now" was clicked.
+    restart: bool,
+    /// Economy mode: main frame id -> page processes.
+    renderers: Rc<RefCell<HashMap<u32, Vec<u32>>>>,
     metrics: Metrics,
     runtime: Result<String, String>,
     /// Address bar text and the account it belongs to.
@@ -131,6 +168,7 @@ impl App {
             cfg.selected = cfg.display_order().into_iter().next();
         }
 
+        let (economy, keep_active) = (cfg.economy, cfg.keep_active);
         App {
             cfg,
             panels: HashMap::new(),
@@ -138,6 +176,10 @@ impl App {
             queue,
             starting: None,
             hwnd: 0,
+            economy,
+            keep_active,
+            restart: false,
+            renderers: Rc::new(RefCell::new(HashMap::new())),
             metrics,
             runtime: panels::runtime_version(),
             address: String::new(),
@@ -238,7 +280,12 @@ impl App {
                 let slot = panels::open(
                     self.hwnd,
                     &acc,
-                    self.cfg.keep_active,
+                    if self.economy {
+                        self.keep_active
+                    } else {
+                        self.cfg.keep_active
+                    },
+                    self.economy,
                     Self::dark(ctx),
                     move || repaint.request_repaint(),
                 );
@@ -312,6 +359,72 @@ impl App {
                 }
                 self.request_open(&id);
                 self.cfg.selected = Some(id);
+                self.mark_dirty();
+            }
+            Action::Reorder(id, target) => {
+                self.cfg.move_to(&id, &target);
+                self.mark_dirty();
+            }
+            Action::PlaceAfter(id, after) => {
+                match &after {
+                    Some(t) => self.cfg.move_after(&id, t),
+                    None => {
+                        // empty grid showing one group: the account joins it
+                        if let Some(g) = self.cfg.grid_group.clone() {
+                            self.cfg.move_to_group(&id, Some(&g));
+                        }
+                    }
+                }
+                if let Some(a) = self.cfg.account_mut(&id) {
+                    a.in_grid = true;
+                }
+                self.request_open(&id);
+                self.cfg.selected = Some(id);
+                self.mark_dirty();
+            }
+            Action::MoveToGroup(id, group) => {
+                self.cfg.move_to_group(&id, group.as_deref());
+                self.mark_dirty();
+            }
+            Action::NewGroup(assign) => {
+                self.dialog = Some(Dialog::Group(GroupEdit {
+                    id: None,
+                    name: String::new(),
+                    assign,
+                }))
+            }
+            Action::RenameGroup(gid) => {
+                if let Some(g) = self.cfg.group(&gid) {
+                    self.dialog = Some(Dialog::Group(GroupEdit {
+                        id: Some(gid.clone()),
+                        name: g.name.clone(),
+                        assign: None,
+                    }));
+                }
+            }
+            Action::DeleteGroup(gid) => {
+                self.cfg.delete_group(&gid);
+                self.mark_dirty();
+            }
+            Action::ToggleCollapse(gid) => {
+                if let Some(g) = self.cfg.group_mut(&gid) {
+                    g.collapsed = !g.collapsed;
+                    self.mark_dirty();
+                }
+            }
+            Action::OpenGroup(gid) => {
+                for id in self.cfg.accounts_in(Some(&gid)) {
+                    self.request_open(&id);
+                }
+            }
+            Action::PauseGroup(gid) => {
+                for id in self.cfg.accounts_in(Some(&gid)) {
+                    self.close_panel(&id);
+                }
+            }
+            Action::GridGroup(g) => {
+                self.cfg.grid_group = g;
+                self.cfg.layout = Layout::Grid;
                 self.mark_dirty();
             }
             Action::Expand(id) => {
@@ -392,10 +505,26 @@ impl App {
         self.last_poll = Instant::now();
         let mut changed = false;
         let mut pids = HashMap::new();
-        pids.insert(metrics::TOTAL.to_string(), std::process::id());
+        pids.insert(metrics::TOTAL.to_string(), vec![std::process::id()]);
         self.audio.clear();
+        if self.economy {
+            // which page processes belong to each account (answer arrives
+            // asynchronously and is used on the next round)
+            if let Some(p) = self.panels.values().next() {
+                let repaint = ctx.clone();
+                p.request_renderers(self.renderers.clone(), move || repaint.request_repaint());
+            }
+        }
+        let renderers = self.renderers.borrow().clone();
         for (id, p) in &self.panels {
-            pids.insert(id.clone(), p.pid);
+            let roots = if self.economy {
+                p.main_frame_id()
+                    .and_then(|f| renderers.get(&f).cloned())
+                    .unwrap_or_default()
+            } else {
+                vec![p.pid]
+            };
+            pids.insert(id.clone(), roots);
             if p.playing_audio() {
                 self.audio.insert(id.clone());
             }
@@ -515,15 +644,57 @@ impl App {
             });
         });
         ui.add_space(8.0);
-        ui.label(
-            RichText::new(trf!(
-                "CONTAS · {}",
-                "ACCOUNTS · {}",
-                self.cfg.accounts.len()
-            ))
-            .small()
-            .color(weak(dark)),
+        // the label row is also where an account is dropped to leave its group
+        let label_row = ui
+            .horizontal(|ui| {
+                ui.label(
+                    RichText::new(trf!(
+                        "CONTAS · {}",
+                        "ACCOUNTS · {}",
+                        self.cfg.accounts.len()
+                    ))
+                    .small()
+                    .color(weak(dark)),
+                );
+                ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                    if ui
+                        .add(
+                            egui::Button::new(RichText::new(tr!("+ Grupo", "+ Group")).small())
+                                .frame(false),
+                        )
+                        .on_hover_text(tr!(
+                            "Criar um grupo para organizar as contas",
+                            "Create a group to organize the accounts"
+                        ))
+                        .clicked()
+                    {
+                        actions.push(Action::NewGroup(None));
+                    }
+                });
+            })
+            .response;
+        let ungroup = ui.interact(
+            label_row.rect,
+            egui::Id::new("ungroup_drop"),
+            Sense::hover(),
         );
+        if let Some(p) = ungroup.dnd_hover_payload::<DragAccount>() {
+            if self
+                .cfg
+                .account(&p.0)
+                .is_some_and(|a| self.cfg.group_of(a).is_some())
+            {
+                ui.painter().rect_stroke(
+                    label_row.rect.expand(2.0),
+                    CornerRadius::same(4),
+                    Stroke::new(1.5, ACCENT),
+                    StrokeKind::Outside,
+                );
+            }
+        }
+        if let Some(p) = ungroup.dnd_release_payload::<DragAccount>() {
+            actions.push(Action::MoveToGroup(p.0.clone(), None));
+        }
         ui.add_space(4.0);
 
         let footer = 58.0;
@@ -533,9 +704,20 @@ impl App {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = 2.0;
-                for id in self.cfg.display_order() {
+                for id in self.cfg.accounts_in(None) {
                     if let Some(a) = self.cfg.account(&id) {
-                        self.account_row(ui, a, actions);
+                        self.account_row(ui, a, 0.0, actions);
+                    }
+                }
+                for g in &self.cfg.groups {
+                    ui.add_space(4.0);
+                    self.group_header(ui, g, actions);
+                    if !g.collapsed {
+                        for id in self.cfg.accounts_in(Some(&g.id)) {
+                            if let Some(a) = self.cfg.account(&id) {
+                                self.account_row(ui, a, GROUP_INDENT, actions);
+                            }
+                        }
                     }
                 }
                 if self.cfg.accounts.is_empty() {
@@ -576,23 +758,44 @@ impl App {
                         }
                     }
                     let n = self.panels.len();
-                    let text = trf!(
-                        "Total: {:.0}% · {}",
-                        "Total: {:.0}% · {}",
+                    let text = format!(
+                        "CPU {:.0}% · RAM {}",
                         total.cpu,
                         metrics::fmt_memory(total.memory)
                     );
+                    let rest = if self.economy {
+                        tr!(
+                            "Interface e navegador compartilhado",
+                            "Interface and shared browser"
+                        )
+                    } else {
+                        tr!("Interface", "Interface")
+                    };
                     let detail = trf!(
-                        "Contas abertas ({n}): {cpu:.0}% CPU · {}
-Interface do Idlerx: {:.0}% CPU · {}",
-                        "Open accounts ({n}): {cpu:.0}% CPU · {}
-Idlerx interface: {:.0}% CPU · {}",
+                        "Total do Idlerx (todas as contas + interface)\n\
+                         Contas abertas ({n}): CPU {cpu:.0}% · RAM {}\n\
+                         {rest}: CPU {:.0}% · RAM {}\n\n\
+                         CPU: parte do processador do PC inteiro (100% = todos os núcleos).\n\
+                         RAM: memória em uso pelos processos (conjunto de trabalho).\n\
+                         GPU (placa de vídeo) não é medida.",
+                        "Idlerx total (all accounts + interface)\n\
+                         Open accounts ({n}): CPU {cpu:.0}% · RAM {}\n\
+                         {rest}: CPU {:.0}% · RAM {}\n\n\
+                         CPU: share of the whole PC's processor (100% = all cores).\n\
+                         RAM: memory in use by the processes (working set).\n\
+                         GPU (graphics card) is not measured.",
                         metrics::fmt_memory(mem),
                         (total.cpu - cpu).max(0.0),
                         metrics::fmt_memory(total.memory.saturating_sub(mem))
                     );
                     ui.label(RichText::new(text).small().color(weak(dark)))
                         .on_hover_text(detail);
+                    if self.economy {
+                        leaf(ui).on_hover_text(tr!(
+                            "Modo econômico ativado: um navegador compartilhado por todas as contas",
+                            "Economy mode on: one browser shared by all accounts"
+                        ));
+                    }
                 });
             });
             ui.separator();
@@ -603,11 +806,8 @@ Idlerx interface: {:.0}% CPU · {}",
         if let Some(p) = self.panels.get(id) {
             let mut s = metrics::fmt_duration(p.started.elapsed());
             if let Some(u) = self.metrics.get(id) {
-                s.push_str(&format!(
-                    " · {:.0}% · {}",
-                    u.cpu,
-                    metrics::fmt_memory(u.memory)
-                ));
+                s.push_str(" · ");
+                s.push_str(&usage_text(u));
             }
             (s, ONLINE, true)
         } else if self.queue.iter().any(|q| q == id) {
@@ -619,19 +819,28 @@ Idlerx interface: {:.0}% CPU · {}",
         }
     }
 
-    fn account_row(&self, ui: &mut egui::Ui, a: &Account, actions: &mut Vec<Action>) {
+    fn account_row(&self, ui: &mut egui::Ui, a: &Account, indent: f32, actions: &mut Vec<Action>) {
         let dark = ui.visuals().dark_mode;
         let selected = self.cfg.selected.as_deref() == Some(a.id.as_str());
-        let (rect, resp) = ui.allocate_exact_size(
+        let (full, resp) = ui.allocate_exact_size(
             Vec2::new(ui.available_width(), ROW_HEIGHT),
             Sense::click_and_drag(),
         );
+        let rect = Rect::from_min_max(full.min + Vec2::new(indent, 0.0), full.max);
         resp.dnd_set_drag_payload(DragAccount(a.id.clone()));
+        let dragging_me = resp.dragged();
         let drop_here = resp
             .dnd_hover_payload::<DragAccount>()
             .is_some_and(|p| p.0 != a.id);
+        // dragged from below: the account goes after this one, so the line
+        // is drawn at the bottom
+        let from_below = resp.dnd_hover_payload::<DragAccount>().is_some_and(|p| {
+            let order = self.cfg.display_order();
+            let pos = |id: &str| order.iter().position(|o| o == id);
+            pos(&p.0) < pos(&a.id)
+        });
         if let Some(p) = resp.dnd_release_payload::<DragAccount>() {
-            actions.push(Action::MoveTo(p.0.clone(), a.id.clone()));
+            actions.push(Action::Reorder(p.0.clone(), a.id.clone()));
         }
 
         let painter = ui.painter_at(rect);
@@ -643,13 +852,26 @@ Idlerx interface: {:.0}% CPU · {}",
             Color32::TRANSPARENT
         };
         painter.rect_filled(rect, CornerRadius::same(8), bg);
+        if dragging_me {
+            painter.rect_stroke(
+                rect.shrink(1.0),
+                CornerRadius::same(8),
+                Stroke::new(1.0, ACCENT.gamma_multiply(0.6)),
+                StrokeKind::Inside,
+            );
+        }
         if drop_here {
+            let y = if from_below {
+                rect.bottom() - 1.0
+            } else {
+                rect.top() + 1.0
+            };
             painter.line_segment(
                 [
-                    rect.left_top() + Vec2::new(4.0, 1.0),
-                    rect.right_top() + Vec2::new(-4.0, 1.0),
+                    Pos2::new(rect.left() + 4.0, y),
+                    Pos2::new(rect.right() - 4.0, y),
                 ],
-                Stroke::new(2.0, ACCENT),
+                Stroke::new(2.5, ACCENT),
             );
         }
 
@@ -665,16 +887,19 @@ Idlerx interface: {:.0}% CPU · {}",
             );
         }
 
+        let hovered = resp.hovered() || ui.rect_contains_pointer(rect);
         let text_left = rect.left() + 50.0;
-        let right_reserved = 50.0;
-        let max_w = rect.right() - text_left - right_reserved;
+        // the name leaves room for the star/sound icons, the second line for
+        // the start/pause button (only while hovering)
+        let name_w = rect.right() - text_left - 44.0;
+        let second_w = rect.right() - text_left - if hovered { 34.0 } else { 6.0 };
         single_line(
             &painter,
             Pos2::new(text_left, rect.top() + 8.0),
             &a.name,
             FontId::proportional(14.5),
             ui.visuals().strong_text_color(),
-            max_w,
+            name_w,
         );
         // open: usage first (it matters more than the address)
         let second = if open {
@@ -686,9 +911,9 @@ Idlerx interface: {:.0}% CPU · {}",
             &painter,
             Pos2::new(text_left, rect.top() + 29.0),
             &second,
-            FontId::proportional(11.5),
+            FontId::proportional(11.0),
             weak(dark),
-            max_w,
+            second_w,
         );
 
         // icons on the right: favorite and sound
@@ -723,7 +948,7 @@ Idlerx interface: {:.0}% CPU · {}",
 
         // quick start/pause button while hovering
         let mut button_clicked = false;
-        if resp.hovered() || ui.rect_contains_pointer(rect) {
+        if hovered && !dragging_me {
             let r = Rect::from_center_size(
                 Pos2::new(rect.right() - 18.0, rect.bottom() - 16.0),
                 Vec2::splat(22.0),
@@ -803,6 +1028,30 @@ Idlerx interface: {:.0}% CPU · {}",
         if ui.button(mute).clicked() {
             actions.push(Action::ToggleMute(id()));
         }
+        ui.menu_button(
+            tr!("      Mover para o grupo", "      Move to group"),
+            |ui| {
+                let current = self.cfg.group_of(a);
+                if ui
+                    .selectable_label(current.is_none(), tr!("Sem grupo", "No group"))
+                    .clicked()
+                {
+                    actions.push(Action::MoveToGroup(id(), None));
+                }
+                for g in &self.cfg.groups {
+                    if ui
+                        .selectable_label(current == Some(g.id.as_str()), &g.name)
+                        .clicked()
+                    {
+                        actions.push(Action::MoveToGroup(id(), Some(g.id.clone())));
+                    }
+                }
+                ui.separator();
+                if ui.button(tr!("+ Novo grupo…", "+ New group…")).clicked() {
+                    actions.push(Action::NewGroup(Some(id())));
+                }
+            },
+        );
         let grid = if a.in_grid {
             tr!("☐  Tirar da grade", "☐  Hide from grid")
         } else {
@@ -827,6 +1076,178 @@ Idlerx interface: {:.0}% CPU · {}",
         {
             actions.push(Action::AskRemove(id()));
         }
+    }
+
+    fn group_header(&self, ui: &mut egui::Ui, g: &Group, actions: &mut Vec<Action>) {
+        let dark = ui.visuals().dark_mode;
+        let (rect, resp) = ui.allocate_exact_size(
+            Vec2::new(ui.available_width(), GROUP_HEIGHT),
+            Sense::click(),
+        );
+        let ids = self.cfg.accounts_in(Some(&g.id));
+        let open = ids.iter().filter(|id| self.is_open_or_opening(id)).count();
+
+        // an account dropped here joins the group
+        let drop_here = resp.dnd_hover_payload::<DragAccount>().is_some();
+        if let Some(p) = resp.dnd_release_payload::<DragAccount>() {
+            actions.push(Action::MoveToGroup(p.0.clone(), Some(g.id.clone())));
+        }
+
+        let painter = ui.painter_at(rect);
+        if drop_here {
+            painter.rect_filled(rect, CornerRadius::same(6), ACCENT.gamma_multiply(0.25));
+            painter.rect_stroke(
+                rect.shrink(1.0),
+                CornerRadius::same(6),
+                Stroke::new(1.5, ACCENT),
+                StrokeKind::Inside,
+            );
+        } else if resp.hovered() {
+            painter.rect_filled(
+                rect,
+                CornerRadius::same(6),
+                ui.visuals().widgets.hovered.weak_bg_fill,
+            );
+        }
+
+        // expand/collapse triangle
+        let c = Pos2::new(rect.left() + 12.0, rect.center().y);
+        let tri = if g.collapsed {
+            vec![
+                c + Vec2::new(-3.0, -5.0),
+                c + Vec2::new(4.0, 0.0),
+                c + Vec2::new(-3.0, 5.0),
+            ]
+        } else {
+            vec![
+                c + Vec2::new(-5.0, -3.0),
+                c + Vec2::new(5.0, -3.0),
+                c + Vec2::new(0.0, 4.0),
+            ]
+        };
+        painter.add(egui::Shape::convex_polygon(tri, weak(dark), Stroke::NONE));
+
+        let hovered = resp.hovered() || ui.rect_contains_pointer(rect);
+        let count = format!("{open}/{}", ids.len());
+        let right = rect.right() - if hovered { 58.0 } else { 8.0 };
+        painter.text(
+            Pos2::new(right, rect.center().y),
+            Align2::RIGHT_CENTER,
+            &count,
+            FontId::proportional(11.0),
+            weak(dark),
+        );
+        single_line(
+            &painter,
+            Pos2::new(rect.left() + 24.0, rect.top() + 7.0),
+            &g.name,
+            FontId::proportional(13.0),
+            ui.visuals().strong_text_color(),
+            right - 34.0 - (rect.left() + 24.0),
+        );
+
+        let mut button_clicked = false;
+        if hovered {
+            let mut x = rect.right() - 4.0;
+            let mut button = |icon: &str, hint: &str| -> bool {
+                let r = Rect::from_min_size(
+                    Pos2::new(x - 24.0, rect.top() + 4.0),
+                    Vec2::new(24.0, rect.height() - 8.0),
+                );
+                x -= 26.0;
+                ui.put(r, egui::Button::new(icon).small())
+                    .on_hover_text(hint)
+                    .clicked()
+            };
+            if button("⏸", tr!("Pausar todas do grupo", "Pause all in the group")) {
+                button_clicked = true;
+                actions.push(Action::PauseGroup(g.id.clone()));
+            }
+            if button("▶", tr!("Abrir todas do grupo", "Open all in the group")) {
+                button_clicked = true;
+                actions.push(Action::OpenGroup(g.id.clone()));
+            }
+        }
+        if resp.clicked() && !button_clicked {
+            actions.push(Action::ToggleCollapse(g.id.clone()));
+        }
+
+        let (mut cpu, mut mem) = (0.0f32, 0u64);
+        for id in &ids {
+            if let Some(u) = self.metrics.get(id) {
+                cpu += u.cpu;
+                mem += u.memory;
+            }
+        }
+        let tip = trf!(
+            "{} conta(s) · {open} aberta(s)\nCPU {cpu:.0}% · RAM {}\n\nClique para recolher/expandir. Arraste contas para cá.",
+            "{} account(s) · {open} open\nCPU {cpu:.0}% · RAM {}\n\nClick to collapse/expand. Drag accounts here.",
+            ids.len(),
+            metrics::fmt_memory(mem)
+        );
+        let resp = resp.on_hover_text(tip);
+        resp.context_menu(|ui| {
+            if ui.button(tr!("▶  Abrir todas", "▶  Open all")).clicked() {
+                actions.push(Action::OpenGroup(g.id.clone()));
+            }
+            if ui.button(tr!("⏸  Pausar todas", "⏸  Pause all")).clicked() {
+                actions.push(Action::PauseGroup(g.id.clone()));
+            }
+            if ui
+                .button(tr!(
+                    "⊞  Mostrar só este grupo na grade",
+                    "⊞  Show only this group in the grid"
+                ))
+                .clicked()
+            {
+                actions.push(Action::GridGroup(Some(g.id.clone())));
+            }
+            ui.separator();
+            if ui.button(tr!("✏  Renomear…", "✏  Rename…")).clicked() {
+                actions.push(Action::RenameGroup(g.id.clone()));
+            }
+            if ui
+                .button(
+                    RichText::new(tr!(
+                        "🗑  Excluir grupo (as contas ficam)",
+                        "🗑  Delete group (accounts stay)"
+                    ))
+                    .color(DANGER),
+                )
+                .clicked()
+            {
+                actions.push(Action::DeleteGroup(g.id.clone()));
+            }
+        });
+    }
+
+    /// The account being dragged follows the pointer.
+    fn drag_ghost(&self, ctx: &egui::Context) {
+        let Some(p) = egui::DragAndDrop::payload::<DragAccount>(ctx) else {
+            return;
+        };
+        let (Some(a), Some(pos)) = (self.cfg.account(&p.0), ctx.pointer_latest_pos()) else {
+            return;
+        };
+        let dark = Self::dark(ctx);
+        egui::Area::new(egui::Id::new("drag_ghost"))
+            .order(egui::Order::Tooltip)
+            .fixed_pos(pos + Vec2::new(14.0, 10.0))
+            .interactable(false)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(panel_bg(dark))
+                    .stroke(Stroke::new(1.0, ACCENT))
+                    .corner_radius(CornerRadius::same(8))
+                    .inner_margin(Margin::symmetric(8, 5))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            let (r, _) = ui.allocate_exact_size(Vec2::splat(20.0), Sense::hover());
+                            avatar(ui.painter(), r.center(), 10.0, a, true);
+                            ui.label(RichText::new(&a.name).strong());
+                        });
+                    });
+            });
     }
 
     // ------------------------------------------------------------ toolbar --
@@ -905,7 +1326,7 @@ Idlerx interface: {:.0}% CPU · {}",
                 {
                     self.focus_mode = true;
                 }
-                self.layout_switch(ui);
+                self.layout_switch(ui, actions);
 
                 if let Some(n) = update::disponivel() {
                     let t = RichText::new(trf!("⬆ Versão {n}", "⬆ Version {n}")).color(ACCENT);
@@ -1010,42 +1431,154 @@ Idlerx interface: {:.0}% CPU · {}",
         });
     }
 
-    fn layout_switch(&mut self, ui: &mut egui::Ui) {
-        let before = (self.cfg.layout, self.cfg.grid_columns);
+    fn layout_switch(&mut self, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
+        let before = (self.cfg.layout, self.cfg.grid_cols, self.cfg.grid_rows);
         if self.cfg.layout == Layout::Grid {
-            let label = match self.cfg.grid_columns {
-                0 => tr!("Auto", "Auto").to_string(),
-                n => trf!("{n} col.", "{n} col."),
-            };
-            egui::ComboBox::from_id_salt("columns")
-                .selected_text(label)
-                .width(70.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.cfg.grid_columns,
-                        0,
-                        tr!("Automático", "Automatic"),
-                    );
-                    for n in 1..=6u8 {
-                        ui.selectable_value(
-                            &mut self.cfg.grid_columns,
-                            n,
-                            trf!("{n} coluna(s)", "{n} column(s)"),
-                        );
-                    }
-                })
-                .response
-                .on_hover_text(tr!("Colunas da grade", "Grid columns"));
+            let label = shape_label(self.cfg.grid_cols, self.cfg.grid_rows);
+            let group = self
+                .cfg
+                .grid_group
+                .as_deref()
+                .and_then(|g| self.cfg.group(g))
+                .map(|g| format!(" · {}", g.name))
+                .unwrap_or_default();
+            ui.menu_button(format!("{label}{group} ⏷"), |ui| {
+                self.grid_menu(ui, actions)
+            })
+            .response
+            .on_hover_text(tr!("Formato da grade", "Grid shape"));
+
+            // open accounts that do not fit in a fixed grid
+            let ids = self.cfg.grid_accounts(|id| self.is_open_or_opening(id));
+            let capacity = (self.cfg.grid_cols as usize) * (self.cfg.grid_rows as usize);
+            if capacity > 0 && ids.len() > capacity {
+                let names: Vec<&str> = ids[capacity..]
+                    .iter()
+                    .filter_map(|id| self.cfg.account(id).map(|a| a.name.as_str()))
+                    .collect();
+                ui.label(
+                    RichText::new(format!("+{}", ids.len() - capacity))
+                        .small()
+                        .color(FAVORITE),
+                )
+                .on_hover_text(trf!(
+                    "Abertas, mas fora da grade (continuam rodando):\n{}\n\nArraste uma delas para um quadro para trocar.",
+                    "Open but outside the grid (still running):\n{}\n\nDrag one onto a cell to swap.",
+                    names.join("\n")
+                ));
+            }
         }
         ui.selectable_value(&mut self.cfg.layout, Layout::Grid, tr!("⊞ Grade", "⊞ Grid"))
             .on_hover_text(tr!(
-                "Todas as contas abertas lado a lado",
-                "All open accounts side by side"
+                "Várias contas abertas lado a lado",
+                "Several open accounts side by side"
             ));
         ui.selectable_value(&mut self.cfg.layout, Layout::Tabs, tr!("▣ Uma", "▣ Single"))
             .on_hover_text(tr!("Uma conta por vez", "One account at a time"));
-        if before != (self.cfg.layout, self.cfg.grid_columns) {
+        if before != (self.cfg.layout, self.cfg.grid_cols, self.cfg.grid_rows) {
             self.mark_dirty();
+        }
+    }
+
+    fn grid_menu(&mut self, ui: &mut egui::Ui, actions: &mut Vec<Action>) {
+        let dark = ui.visuals().dark_mode;
+        ui.set_min_width(260.0);
+        ui.label(
+            RichText::new(tr!("Formato", "Shape"))
+                .small()
+                .color(weak(dark)),
+        );
+        const PRESETS: [(u8, u8); 8] = [
+            (0, 0),
+            (2, 1),
+            (1, 2),
+            (3, 1),
+            (2, 2),
+            (3, 2),
+            (3, 3),
+            (4, 2),
+        ];
+        egui::Grid::new("grid_presets")
+            .spacing([6.0, 6.0])
+            .show(ui, |ui| {
+                for (i, (c, r)) in PRESETS.into_iter().enumerate() {
+                    let selected = self.cfg.grid_cols == c && self.cfg.grid_rows == r;
+                    if shape_button(ui, c, r, selected).clicked() {
+                        self.cfg.grid_cols = c;
+                        self.cfg.grid_rows = r;
+                        self.mark_dirty();
+                    }
+                    if i % 4 == 3 {
+                        ui.end_row();
+                    }
+                }
+            });
+
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(tr!("Personalizado", "Custom"))
+                .small()
+                .color(weak(dark)),
+        );
+        ui.horizontal(|ui| {
+            let auto = |v: f64, _| {
+                if v == 0.0 {
+                    tr!("auto", "auto").to_string()
+                } else {
+                    format!("{v}")
+                }
+            };
+            ui.label(tr!("Colunas", "Columns"));
+            let c = ui.add(
+                egui::DragValue::new(&mut self.cfg.grid_cols)
+                    .range(0..=8)
+                    .custom_formatter(auto),
+            );
+            ui.label(tr!("Linhas", "Rows"));
+            let r = ui.add(
+                egui::DragValue::new(&mut self.cfg.grid_rows)
+                    .range(0..=8)
+                    .custom_formatter(auto),
+            );
+            if c.changed() || r.changed() {
+                // rows only make sense with fixed columns
+                if self.cfg.grid_cols == 0 {
+                    self.cfg.grid_rows = 0;
+                }
+                self.mark_dirty();
+            }
+        });
+        ui.label(
+            RichText::new(tr!(
+                "Com linhas fixas, as contas que não couberem continuam rodando fora da tela.",
+                "With fixed rows, accounts that do not fit keep running off screen."
+            ))
+            .small()
+            .color(weak(dark)),
+        );
+
+        if !self.cfg.groups.is_empty() {
+            ui.separator();
+            ui.label(
+                RichText::new(tr!("Mostrar na grade", "Show in the grid"))
+                    .small()
+                    .color(weak(dark)),
+            );
+            let current = self.cfg.grid_group.clone();
+            if ui
+                .selectable_label(current.is_none(), tr!("Todas as contas", "All accounts"))
+                .clicked()
+            {
+                actions.push(Action::GridGroup(None));
+            }
+            for g in &self.cfg.groups {
+                if ui
+                    .selectable_label(current.as_deref() == Some(g.id.as_str()), &g.name)
+                    .clicked()
+                {
+                    actions.push(Action::GridGroup(Some(g.id.clone())));
+                }
+            }
         }
     }
 
@@ -1191,15 +1724,9 @@ Idlerx interface: {:.0}% CPU · {}",
         actions: &mut Vec<Action>,
     ) {
         let dark = ui.visuals().dark_mode;
-        let ids: Vec<String> = self
-            .cfg
-            .display_order()
-            .into_iter()
-            .filter(|id| {
-                self.cfg.account(id).is_some_and(|a| a.in_grid) && self.is_open_or_opening(id)
-            })
-            .collect();
-        if ids.is_empty() {
+        let ids = self.cfg.grid_accounts(|id| self.is_open_or_opening(id));
+        let fixed = self.cfg.grid_cols > 0 && self.cfg.grid_rows > 0;
+        if ids.is_empty() && !fixed {
             centered(ui, rect, |ui| {
                 ui.label(RichText::new("⊞").size(40.0).color(weak(dark)));
                 ui.label(
@@ -1220,32 +1747,65 @@ Idlerx interface: {:.0}% CPU · {}",
             });
             let r = ui.interact(rect, egui::Id::new("grid_drop_empty"), Sense::hover());
             if let Some(p) = r.dnd_release_payload::<DragAccount>() {
-                actions.push(Action::MoveTo(p.0.clone(), p.0.clone()));
+                actions.push(Action::PlaceAfter(p.0.clone(), None));
             }
             return;
         }
 
         let area = rect.shrink(GRID_GAP);
         let header = if self.focus_mode { 0.0 } else { CELL_HEADER };
-        let cols = if self.cfg.grid_columns > 0 {
-            (self.cfg.grid_columns as usize).min(ids.len())
-        } else {
-            auto_columns(ids.len(), area.size(), header)
-        };
-        let rows = ids.len().div_ceil(cols);
+        let (cols, rows) =
+            config::grid_shape(self.cfg.grid_cols, self.cfg.grid_rows, ids.len(), |n| {
+                auto_columns(n, area.size(), header)
+            });
         let cell = Vec2::new(
             (area.width() - GRID_GAP * (cols as f32 - 1.0)) / cols as f32,
             (area.height() - GRID_GAP * (rows as f32 - 1.0)) / rows as f32,
         );
 
-        for (i, id) in ids.iter().enumerate() {
-            let (c, r) = (i % cols, i / cols);
+        for slot in 0..cols * rows {
+            let (c, r) = (slot % cols, slot / cols);
             let min = area.min
                 + Vec2::new(
                     c as f32 * (cell.x + GRID_GAP),
                     r as f32 * (cell.y + GRID_GAP),
                 );
             let cell_rect = Rect::from_min_size(min, cell);
+
+            let Some(id) = ids.get(slot) else {
+                // empty cell: an account dragged here joins the grid
+                let drop = ui.interact(
+                    cell_rect,
+                    egui::Id::new(("empty_cell", slot)),
+                    Sense::hover(),
+                );
+                let hovering = drop.dnd_hover_payload::<DragAccount>().is_some();
+                if let Some(p) = drop.dnd_release_payload::<DragAccount>() {
+                    actions.push(Action::PlaceAfter(p.0.clone(), ids.last().cloned()));
+                }
+                let stroke = if hovering {
+                    Stroke::new(2.0, ACCENT)
+                } else {
+                    Stroke::new(1.0, border(dark))
+                };
+                ui.painter().rect_stroke(
+                    cell_rect,
+                    CornerRadius::same(6),
+                    stroke,
+                    StrokeKind::Inside,
+                );
+                ui.painter().text(
+                    cell_rect.center(),
+                    Align2::CENTER_CENTER,
+                    tr!(
+                        "Arraste uma conta da lista para cá",
+                        "Drag an account from the list here"
+                    ),
+                    FontId::proportional(12.0),
+                    weak(dark),
+                );
+                continue;
+            };
             let Some(a) = self.cfg.account(id).cloned() else {
                 continue;
             };
@@ -1308,10 +1868,9 @@ Idlerx interface: {:.0}% CPU · {}",
         let mut usage = String::new();
         if let (Some(p), Some(u)) = (self.panels.get(&a.id), self.metrics.get(&a.id)) {
             usage = format!(
-                "{} · {:.0}% · {}",
+                "{} · {}",
                 metrics::fmt_duration(p.started.elapsed()),
-                u.cpu,
-                metrics::fmt_memory(u.memory)
+                usage_text(u)
             );
         }
 
@@ -1346,10 +1905,10 @@ Idlerx interface: {:.0}% CPU · {}",
             actions.push(Action::ToggleMute(a.id.clone()));
         }
 
-        let usage_w = if usage.is_empty() || rect.width() < 360.0 {
+        let usage_w = if usage.is_empty() || rect.width() < 400.0 {
             0.0
         } else {
-            150.0
+            190.0
         };
         if usage_w > 0.0 {
             painter.text(
@@ -1471,6 +2030,75 @@ Idlerx interface: {:.0}% CPU · {}",
                     }
                 }
                 Dialog::Edit(st)
+            }
+            Dialog::Group(mut st) => {
+                let modal = egui::Modal::new(egui::Id::new("group")).show(ctx, |ui| {
+                    ui.set_width(360.0);
+                    ui.heading(if st.id.is_some() {
+                        tr!("Renomear grupo", "Rename group")
+                    } else {
+                        tr!("Novo grupo", "New group")
+                    });
+                    ui.add_space(8.0);
+                    let r = ui.add(
+                        egui::TextEdit::singleline(&mut st.name)
+                            .hint_text(tr!(
+                                "Ex.: Tibia, Contas principais",
+                                "E.g. Tibia, Main accounts"
+                            ))
+                            .desired_width(f32::INFINITY),
+                    );
+                    if !r.has_focus() && st.name.is_empty() {
+                        r.request_focus();
+                    }
+                    ui.add_space(10.0);
+                    let mut save = ui.input(|i| i.key_pressed(Key::Enter));
+                    let mut cancel = false;
+                    ui.horizontal(|ui| {
+                        if ui
+                            .add(
+                                egui::Button::new(
+                                    RichText::new(tr!("Salvar", "Save")).color(Color32::WHITE),
+                                )
+                                .fill(ACCENT),
+                            )
+                            .clicked()
+                        {
+                            save = true;
+                        }
+                        if ui.button(tr!("Cancelar", "Cancel")).clicked() {
+                            cancel = true;
+                        }
+                    });
+                    (save, cancel)
+                });
+                let (save, cancel) = modal.inner;
+                let name = st.name.trim().to_string();
+                if cancel || modal.should_close() {
+                    keep = false;
+                } else if save && !name.is_empty() {
+                    match &st.id {
+                        Some(gid) => {
+                            if let Some(g) = self.cfg.group_mut(gid) {
+                                g.name = name;
+                            }
+                        }
+                        None => {
+                            let gid = config::new_id();
+                            self.cfg.groups.push(Group {
+                                id: gid.clone(),
+                                name,
+                                collapsed: false,
+                            });
+                            if let Some(acc) = &st.assign {
+                                self.cfg.move_to_group(acc, Some(&gid));
+                            }
+                        }
+                    }
+                    self.mark_dirty();
+                    keep = false;
+                }
+                Dialog::Group(st)
             }
             Dialog::Settings => {
                 if self.settings_dialog(ctx) {
@@ -1675,6 +2303,46 @@ Idlerx interface: {:.0}% CPU · {}",
                 .small()
                 .color(weak(dark)),
             );
+
+            ui.add_space(6.0);
+            ui.checkbox(
+                &mut self.cfg.economy,
+                tr!(
+                    "Modo econômico: um navegador compartilhado por todas as contas (recomendado)",
+                    "Economy mode: one browser shared by all accounts (recommended)"
+                ),
+            );
+            ui.label(
+                RichText::new(tr!(
+                    "Gasta bem menos memória (cerca de 100 MB a menos por conta). As contas \
+                     continuam isoladas (login, cookies e cache próprios), mas se o navegador \
+                     compartilhado travar, todas caem juntas. Os logins de cada modo ficam \
+                     guardados separados: ao trocar, entre nos jogos de novo uma vez.",
+                    "Uses much less memory (about 100 MB less per account). Accounts stay \
+                     isolated (their own login, cookies and cache), but if the shared browser \
+                     crashes, all of them go down together. Each mode keeps its own logins: \
+                     after switching, log in to the games once again."
+                ))
+                .small()
+                .color(weak(dark)),
+            );
+            let needs_restart = self.cfg.economy != self.economy
+                || (self.economy && self.cfg.keep_active != self.keep_active);
+            if needs_restart {
+                ui.horizontal(|ui| {
+                    ui.label(
+                        RichText::new(tr!(
+                            "Vale ao reiniciar o Idlerx.",
+                            "Applies after restarting Idlerx."
+                        ))
+                        .small()
+                        .color(FAVORITE),
+                    );
+                    if ui.button(tr!("Reiniciar agora", "Restart now")).clicked() {
+                        self.restart = true;
+                    }
+                });
+            }
             ui.add_space(6.0);
             ui.checkbox(
                 &mut self.cfg.check_updates,
@@ -1783,7 +2451,29 @@ Idlerx interface: {:.0}% CPU · {}",
         modal.inner || modal.should_close()
     }
 
+    /// Opens a new instance (it waits for this one to close) and closes.
+    fn restart_now(&mut self, ctx: &egui::Context) {
+        self.restart = false;
+        let Ok(exe) = std::env::current_exe() else {
+            return;
+        };
+        let started = std::process::Command::new(exe)
+            .arg(update::ARG_APOS_ATUALIZAR)
+            .arg(std::process::id().to_string())
+            .spawn();
+        if started.is_ok() {
+            self.closing = true;
+            self.save();
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
     fn after_update_check(&mut self, ctx: &egui::Context) {
+        if self.restart && !self.closing {
+            self.dialog = None;
+            self.restart_now(ctx);
+            return;
+        }
         if matches!(update::estado(), update::Estado::Reiniciando(_)) && !self.closing {
             self.closing = true;
             self.save();
@@ -1865,6 +2555,7 @@ impl eframe::App for App {
         egui::CentralPanel::no_frame()
             .show(ui, |ui| self.content(ui, &mut placements, &mut actions));
         self.dialogs(&ctx, &mut actions);
+        self.drag_ghost(&ctx);
 
         for a in actions {
             self.apply(a);
@@ -2006,6 +2697,126 @@ fn overlay_rects(ctx: &egui::Context) -> Vec<Rect> {
             .filter_map(|l| m.area_rect(l.id))
             .collect()
     })
+}
+
+/// Small green leaf (economy mode), drawn so it does not depend on the font.
+fn leaf(ui: &mut egui::Ui) -> egui::Response {
+    const GREEN: Color32 = Color32::from_rgb(0x4a, 0xde, 0x80);
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(14.0), Sense::hover());
+    let c = rect.center();
+    let tip = c + Vec2::new(5.0, -5.0);
+    let base = c + Vec2::new(-4.0, 4.0);
+    // two curved edges between the base and the tip
+    let mut points = Vec::new();
+    for i in 0..=8 {
+        let t = i as f32 / 8.0;
+        let bulge = (t * std::f32::consts::PI).sin() * 3.2;
+        points.push(base + (tip - base) * t + Vec2::new(-bulge, -bulge));
+    }
+    for i in (1..8).rev() {
+        let t = i as f32 / 8.0;
+        let bulge = (t * std::f32::consts::PI).sin() * 3.2;
+        points.push(base + (tip - base) * t + Vec2::new(bulge, bulge));
+    }
+    let painter = ui.painter();
+    painter.add(egui::Shape::convex_polygon(points, GREEN, Stroke::NONE));
+    // stem and middle vein
+    painter.line_segment([base + Vec2::new(-2.0, 2.0), base], Stroke::new(1.3, GREEN));
+    painter.line_segment(
+        [base, tip],
+        Stroke::new(0.8, panel_bg(ui.visuals().dark_mode)),
+    );
+    resp
+}
+
+/// "CPU 3% · RAM 245 MB"
+fn usage_text(u: metrics::Usage) -> String {
+    format!("CPU {:.0}% · RAM {}", u.cpu, metrics::fmt_memory(u.memory))
+}
+
+/// Name of a grid shape: "Auto", "3 col." or "2×2".
+fn shape_label(cols: u8, rows: u8) -> String {
+    match (cols, rows) {
+        (0, _) => tr!("Auto", "Auto").to_string(),
+        (c, 0) => trf!("{c} col.", "{c} col."),
+        (c, r) => format!("{c}×{r}"),
+    }
+}
+
+/// Button with a small drawing of the grid shape.
+fn shape_button(ui: &mut egui::Ui, cols: u8, rows: u8, selected: bool) -> egui::Response {
+    let dark = ui.visuals().dark_mode;
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(56.0, 52.0), Sense::click());
+    let painter = ui.painter_at(rect);
+    let bg = if selected {
+        ACCENT.gamma_multiply(0.25)
+    } else if resp.hovered() {
+        ui.visuals().widgets.hovered.weak_bg_fill
+    } else {
+        Color32::TRANSPARENT
+    };
+    painter.rect_filled(rect, CornerRadius::same(6), bg);
+    if selected {
+        painter.rect_stroke(
+            rect,
+            CornerRadius::same(6),
+            Stroke::new(1.5, ACCENT),
+            StrokeKind::Inside,
+        );
+    }
+    let pic = Rect::from_center_size(
+        Pos2::new(rect.center().x, rect.top() + 18.0),
+        Vec2::new(40.0, 24.0),
+    );
+    let color = if selected { ACCENT } else { weak(dark) };
+    if cols == 0 {
+        painter.rect_stroke(
+            pic,
+            CornerRadius::same(3),
+            Stroke::new(1.2, color),
+            StrokeKind::Inside,
+        );
+        painter.text(
+            pic.center(),
+            Align2::CENTER_CENTER,
+            "A",
+            FontId::proportional(13.0),
+            color,
+        );
+    } else {
+        let (c, r) = (cols as f32, rows.max(1) as f32);
+        let gap = 2.0;
+        let w = (pic.width() - gap * (c - 1.0)) / c;
+        let h = (pic.height() - gap * (r - 1.0)) / r;
+        for i in 0..cols {
+            for j in 0..rows.max(1) {
+                let min = pic.min + Vec2::new(i as f32 * (w + gap), j as f32 * (h + gap));
+                painter.rect_filled(
+                    Rect::from_min_size(min, Vec2::new(w, h)),
+                    CornerRadius::same(2),
+                    color,
+                );
+            }
+        }
+    }
+    painter.text(
+        Pos2::new(rect.center().x, rect.bottom() - 9.0),
+        Align2::CENTER_CENTER,
+        shape_label(cols, rows),
+        FontId::proportional(10.5),
+        color,
+    );
+    let hint = match (cols, rows) {
+        (0, _) => tr!(
+            "Automático: ajusta ao tamanho da janela",
+            "Automatic: fits the window size"
+        ),
+        (2, 1) => tr!("Lado a lado", "Side by side"),
+        (1, 2) => tr!("Uma em cima da outra", "One above the other"),
+        (3, 1) => tr!("Três lado a lado", "Three side by side"),
+        _ => tr!("Grade fixa", "Fixed grid"),
+    };
+    resp.on_hover_text(hint)
 }
 
 /// Number of grid columns that gives the largest cells closest to 16:9.
