@@ -1,0 +1,174 @@
+Idlerx - third-party components
+================================
+
+Idlerx itself is licensed under the GNU General Public License v3.0 or later
+(see LICENSE). The executable includes the components below, each under its
+own license. All of them are compatible with the GPL-3.0.
+
+Microsoft Edge WebView2
+-----------------------
+Idlerx shows the pages with the Microsoft Edge WebView2 Runtime, which is
+part of Windows (or installed from Microsoft) and is NOT redistributed with
+Idlerx. The WebView2 loader is linked into the executable through the
+webview2-com-sys crate, under the Microsoft WebView2 SDK license
+(BSD-3-Clause style): https://www.nuget.org/packages/Microsoft.Web.WebView2/License
+
+Fonts
+-----
+The interface fonts come with egui (epaint_default_fonts): Ubuntu Light
+(Ubuntu Font Licence 1.0), Noto Emoji (SIL Open Font License 1.1) and
+emoji-icon-font (SIL Open Font License 1.1).
+
+Rust crates
+-----------
+name version - license - repository
+accesskit v0.24.1 - MIT OR Apache-2.0 - https://github.com/AccessKit/accesskit
+adler2 v2.0.1 - 0BSD OR MIT OR Apache-2.0 - https://github.com/oyvindln/adler2
+ahash v0.8.12 - MIT OR Apache-2.0 - https://github.com/tkaitchuck/ahash
+allocator-api2 v0.2.21 - MIT OR Apache-2.0 - https://github.com/zakarumych/allocator-api2
+arboard v3.6.1 - MIT OR Apache-2.0 - https://github.com/1Password/arboard
+arrayvec v0.7.8 - MIT OR Apache-2.0 - https://github.com/bluss/arrayvec
+ash v0.38.0+1.3.281 - MIT OR Apache-2.0 - https://github.com/ash-rs/ash
+bit-set v0.10.0 - Apache-2.0 OR MIT - https://github.com/contain-rs/bit-set
+bit-vec v0.9.1 - Apache-2.0 OR MIT - https://github.com/contain-rs/bit-vec
+bitflags v2.13.2 - MIT OR Apache-2.0 - https://github.com/bitflags/bitflags
+bytemuck v1.25.2 - Zlib OR Apache-2.0 OR MIT - https://github.com/Lokathor/bytemuck
+bytemuck_derive v1.12.1 (proc-macro) - Zlib OR Apache-2.0 OR MIT - https://github.com/Lokathor/bytemuck
+byteorder-lite v0.1.0 - Unlicense OR MIT - https://github.com/image-rs/byteorder-lite
+cfg-if v1.0.5 - MIT OR Apache-2.0 - https://github.com/rust-lang/cfg-if
+clipboard-win v5.4.1 - BSL-1.0 - https://github.com/DoumanAsh/clipboard-win
+codespan-reporting v0.13.1 - Apache-2.0 - https://github.com/brendanzab/codespan
+color v0.3.3 - Apache-2.0 OR MIT - https://github.com/linebender/color
+crc32fast v1.5.2 - MIT OR Apache-2.0 - https://github.com/srijs/rust-crc32fast
+cursor-icon v1.2.0 - MIT OR Apache-2.0 OR Zlib - https://github.com/rust-windowing/cursor-icon
+document-features v0.2.12 (proc-macro) - MIT OR Apache-2.0 - https://github.com/slint-ui/document-features
+dpi v0.1.2 - Apache-2.0 AND MIT - https://github.com/rust-windowing/winit
+ecolor v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui
+eframe v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui/tree/main/crates/eframe
+egui v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui
+egui-wgpu v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui/tree/main/crates/egui-wgpu
+egui-winit v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui/tree/main/crates/egui-winit
+either v1.19.0 - MIT OR Apache-2.0 - https://github.com/rayon-rs/either
+emath v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui/tree/main/crates/emath
+epaint v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui/tree/main/crates/epaint
+epaint_default_fonts v0.36.2 - (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 - https://github.com/emilk/egui/tree/main/crates/epaint_default_fonts
+equivalent v1.0.2 - Apache-2.0 OR MIT - https://github.com/indexmap-rs/equivalent
+error-code v3.4.0 - BSL-1.0 - https://github.com/DoumanAsh/error-code
+euclid v0.22.14 - MIT OR Apache-2.0 - https://github.com/servo/euclid
+fdeflate v0.3.7 - MIT OR Apache-2.0 - https://github.com/image-rs/fdeflate
+fearless_simd v0.4.1 - Apache-2.0 OR MIT - https://github.com/linebender/fearless_simd
+flate2 v1.1.10 - MIT OR Apache-2.0 - https://github.com/rust-lang/flate2-rs
+foldhash v0.2.0 - Zlib - https://github.com/orlp/foldhash
+font-types v0.12.6 - MIT OR Apache-2.0 - https://github.com/googlefonts/fontations
+getrandom v0.4.3 - MIT OR Apache-2.0 - https://github.com/rust-random/getrandom
+glow v0.17.0 - MIT OR Apache-2.0 OR Zlib - https://github.com/grovesNL/glow
+glutin_wgl_sys v0.6.1 - Apache-2.0 - https://github.com/rust-windowing/glutin
+gpu-allocator v0.28.0 - MIT OR Apache-2.0 - https://github.com/Traverse-Research/gpu-allocator
+guillotiere v0.7.0 - MIT/Apache-2.0 - https://github.com/nical/guillotiere
+half v2.7.1 - MIT OR Apache-2.0 - https://github.com/VoidStarKat/half-rs
+harfrust v0.12.0 - MIT - https://github.com/harfbuzz/harfrust
+hashbrown v0.16.1 - MIT OR Apache-2.0 - https://github.com/rust-lang/hashbrown
+hashbrown v0.17.1 - MIT OR Apache-2.0 - https://github.com/rust-lang/hashbrown
+image v0.25.10 - MIT OR Apache-2.0 - https://github.com/image-rs/image
+indexmap v2.14.2 - Apache-2.0 OR MIT - https://github.com/indexmap-rs/indexmap
+itertools v0.15.0 - MIT OR Apache-2.0 - https://github.com/rust-itertools/itertools
+itoa v1.0.18 - MIT OR Apache-2.0 - https://github.com/dtolnay/itoa
+khronos-egl v6.0.0 - MIT/Apache-2.0 - https://github.com/timothee-haudebourg/khronos-egl
+kurbo v0.13.1 - Apache-2.0 OR MIT - https://github.com/linebender/kurbo
+libc v0.2.190 - MIT OR Apache-2.0 - https://github.com/rust-lang/libc
+libloading v0.8.9 - ISC - https://github.com/nagisa/rust_libloading/
+libm v0.2.16 - MIT - https://github.com/rust-lang/compiler-builtins
+linebender_resource_handle v0.1.1 - Apache-2.0 OR MIT - https://github.com/linebender/raw_resource_handle
+litrs v1.0.0 - MIT OR Apache-2.0 - https://github.com/LukasKalbertodt/litrs
+lock_api v0.4.14 - MIT OR Apache-2.0 - https://github.com/Amanieu/parking_lot
+log v0.4.34 - MIT OR Apache-2.0 - https://github.com/rust-lang/log
+memchr v2.8.3 - Unlicense OR MIT - https://github.com/BurntSushi/memchr
+miniz_oxide v0.8.9 - MIT OR Zlib OR Apache-2.0 - https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
+miniz_oxide v0.9.1 - MIT OR Zlib OR Apache-2.0 - https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide
+moxcms v0.8.1 - BSD-3-Clause OR Apache-2.0 - https://github.com/awxkee/moxcms.git
+naga v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+naga-types v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+nohash-hasher v0.2.0 - Apache-2.0 OR MIT - https://github.com/paritytech/nohash-hasher
+ntapi v0.4.3 - Apache-2.0 OR MIT - https://github.com/MSxDOS/ntapi
+num-traits v0.2.19 - MIT OR Apache-2.0 - https://github.com/rust-num/num-traits
+once_cell v1.21.4 - MIT OR Apache-2.0 - https://github.com/matklad/once_cell
+open v5.4.4 - MIT - https://github.com/Byron/open-rs
+ordered-float v5.5.0 - MIT - https://github.com/reem/rust-ordered-float
+parking_lot v0.12.5 - MIT OR Apache-2.0 - https://github.com/Amanieu/parking_lot
+parking_lot_core v0.9.12 - MIT OR Apache-2.0 - https://github.com/Amanieu/parking_lot
+peniko v0.6.1 - Apache-2.0 OR MIT - https://github.com/linebender/peniko
+pin-project-lite v0.2.17 - Apache-2.0 OR MIT - https://github.com/taiki-e/pin-project-lite
+png v0.18.1 - MIT OR Apache-2.0 - https://github.com/image-rs/image-png
+pollster v1.0.1 - Apache-2.0/MIT - https://github.com/zesterer/pollster
+polycool v0.4.0 - MIT OR Apache-2.0 - https://github.com/linebender/kurbo
+presser v0.3.1 - MIT OR Apache-2.0 - https://github.com/EmbarkStudios/presser
+proc-macro2 v1.0.107 - MIT OR Apache-2.0 - https://github.com/dtolnay/proc-macro2
+profiling v1.0.18 - MIT OR Apache-2.0 - https://github.com/aclysma/profiling
+pxfm v0.1.30 - BSD-3-Clause OR Apache-2.0 - https://github.com/awxkee/pxfm
+quote v1.0.47 - MIT OR Apache-2.0 - https://github.com/dtolnay/quote
+range-alloc v0.1.5 - MIT OR Apache-2.0 - https://github.com/gfx-rs/range-alloc
+raw-window-handle v0.6.2 - MIT OR Apache-2.0 OR Zlib - https://github.com/rust-windowing/raw-window-handle
+read-fonts v0.41.0 - MIT OR Apache-2.0 - https://github.com/googlefonts/fontations
+renderdoc-sys v1.1.0 - MIT OR Apache-2.0 - https://github.com/ebkalderon/renderdoc-rs
+rustc-hash v1.1.0 - Apache-2.0/MIT - https://github.com/rust-lang-nursery/rustc-hash
+rustc-hash v2.1.3 - Apache-2.0 OR MIT - https://github.com/rust-lang/rustc-hash
+scopeguard v1.2.0 - MIT OR Apache-2.0 - https://github.com/bluss/scopeguard
+self_cell v1.3.0 - Apache-2.0 OR GPL-2.0-only - https://github.com/Voultapher/self_cell
+serde v1.0.229 - MIT OR Apache-2.0 - https://github.com/serde-rs/serde
+serde_core v1.0.229 - MIT OR Apache-2.0 - https://github.com/serde-rs/serde
+serde_derive v1.0.229 (proc-macro) - MIT OR Apache-2.0 - https://github.com/serde-rs/serde
+serde_json v1.0.151 - MIT OR Apache-2.0 - https://github.com/serde-rs/json
+simd-adler32 v0.3.10 - MIT - https://github.com/mcountryman/simd-adler32
+skrifa v0.44.0 - MIT OR Apache-2.0 - https://github.com/googlefonts/fontations
+smallvec v1.16.3 - MIT OR Apache-2.0 - https://github.com/servo/rust-smallvec
+smol_str v0.2.2 - MIT OR Apache-2.0 - https://github.com/rust-analyzer/smol_str
+spirv v0.4.0+sdk-1.4.341.0 - Apache-2.0 - https://github.com/gfx-rs/rspirv
+static_assertions v1.1.0 - MIT OR Apache-2.0 - https://github.com/nvzqz/static-assertions-rs
+syn v2.0.119 - MIT OR Apache-2.0 - https://github.com/dtolnay/syn
+syn v3.0.7 - MIT OR Apache-2.0 - https://github.com/dtolnay/syn
+sysinfo v0.39.6 - MIT - https://github.com/GuillaumeGomez/sysinfo
+thiserror v2.0.21 - MIT OR Apache-2.0 - https://github.com/dtolnay/thiserror
+thiserror-impl v2.0.21 (proc-macro) - MIT OR Apache-2.0 - https://github.com/dtolnay/thiserror
+tracing v0.1.44 - MIT - https://github.com/tokio-rs/tracing
+tracing-core v0.1.36 - MIT - https://github.com/tokio-rs/tracing
+type-map v0.5.1 - MIT/Apache-2.0 - https://github.com/kardeiz/type-map
+unicode-general-category v1.1.0 - Apache-2.0 - https://github.com/yeslogic/unicode-general-category
+unicode-ident v1.0.26 - (MIT OR Apache-2.0) AND Unicode-3.0 - https://github.com/dtolnay/unicode-ident
+unicode-segmentation v1.13.3 - MIT OR Apache-2.0 - https://github.com/unicode-rs/unicode-segmentation
+unicode-width v0.2.2 - MIT OR Apache-2.0 - https://github.com/unicode-rs/unicode-width
+uuid v1.28.0 - Apache-2.0 OR MIT - https://github.com/uuid-rs/uuid
+vello_common v0.1.0 - Apache-2.0 OR MIT - https://github.com/linebender/vello
+vello_cpu v0.1.0 - Apache-2.0 OR MIT - https://github.com/linebender/vello
+web-time v1.1.0 - MIT OR Apache-2.0 - https://github.com/daxpedda/web-time
+webview2-com v0.39.1 - MIT - https://github.com/wravery/webview2-rs
+webview2-com-macros v0.8.1 (proc-macro) - MIT - https://github.com/wravery/webview2-rs
+webview2-com-sys v0.39.1 - MIT - https://github.com/wravery/webview2-rs
+wgpu v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+wgpu-core v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+wgpu-core-deps-windows-linux-android v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+wgpu-hal v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+wgpu-naga-bridge v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+wgpu-types v30.0.1 - MIT OR Apache-2.0 - https://github.com/gfx-rs/wgpu
+winapi v0.3.9 - MIT/Apache-2.0 - https://github.com/retep998/winapi-rs
+windows v0.62.2 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-collections v0.3.2 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-core v0.62.2 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-future v0.3.2 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-implement v0.60.2 (proc-macro) - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-interface v0.59.3 (proc-macro) - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-link v0.2.1 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-numerics v0.3.1 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-result v0.4.1 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-strings v0.5.1 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-sys v0.52.0 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-sys v0.60.2 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-sys v0.61.2 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-targets v0.52.6 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-targets v0.53.5 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows-threading v0.2.1 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows_x86_64_msvc v0.52.6 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+windows_x86_64_msvc v0.53.1 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
+winit v0.30.13 - Apache-2.0 - https://github.com/rust-windowing/winit
+zerocopy v0.8.62 - BSD-2-Clause OR Apache-2.0 OR MIT - https://github.com/google/zerocopy
+zerocopy-derive v0.8.62 (proc-macro) - BSD-2-Clause OR Apache-2.0 OR MIT - https://github.com/google/zerocopy
+zmij v1.0.23 - MIT - https://github.com/dtolnay/zmij

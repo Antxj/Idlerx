@@ -1,0 +1,30 @@
+[package]
+name = "idlerx"
+version = "0.1.0"
+edition = "2021"
+description = "Several isolated browser sessions (accounts) side by side in a single window"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Antxj/Idlerx"
+
+[dependencies]
+eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts"] }
+webview2-com = "0.39"
+windows = { version = "0.62", features = ["Win32_Foundation"] }
+windows-core = "0.62"
+raw-window-handle = "0.6"
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+open = "5"
+getrandom = "0.4"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust", "Win32_System_Threading", "Win32_Globalization"] }
+
+[build-dependencies]
+embed-resource = "3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

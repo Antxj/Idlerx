@@ -1,0 +1,65 @@
+"""Regenerates THIRD-PARTY-LICENSES.txt from the Rust dependency tree.
+
+Run from the repository root after changing dependencies:
+  py tools/third_party.py
+"""
+
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+HEADER = """Idlerx - third-party components
+================================
+
+Idlerx itself is licensed under the GNU General Public License v3.0 or later
+(see LICENSE). The executable includes the components below, each under its
+own license. All of them are compatible with the GPL-3.0.
+
+Microsoft Edge WebView2
+-----------------------
+Idlerx shows the pages with the Microsoft Edge WebView2 Runtime, which is
+part of Windows (or installed from Microsoft) and is NOT redistributed with
+Idlerx. The WebView2 loader is linked into the executable through the
+webview2-com-sys crate, under the Microsoft WebView2 SDK license
+(BSD-3-Clause style): https://www.nuget.org/packages/Microsoft.Web.WebView2/License
+
+Fonts
+-----
+The interface fonts come with egui (epaint_default_fonts): Ubuntu Light
+(Ubuntu Font Licence 1.0), Noto Emoji (SIL Open Font License 1.1) and
+emoji-icon-font (SIL Open Font License 1.1).
+
+Rust crates
+-----------
+name version - license - repository
+"""
+
+
+def main() -> None:
+    out = subprocess.run(
+        [
+            "cargo", "tree", "-e", "normal",
+            "--target", "x86_64-pc-windows-msvc",
+            "--prefix", "none",
+            "--format", "{p}|{l}|{r}",
+        ],
+        cwd=ROOT / "rust",
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    rows = set()
+    for line in out.splitlines():
+        line = line.replace(" (*)", "").strip()
+        if not line or line.startswith("idlerx "):
+            continue
+        pkg, lic, repo = (line.split("|") + ["", ""])[:3]
+        rows.add(f"{pkg} - {lic or 'see repository'} - {repo}".rstrip(" -"))
+    text = HEADER + "\n".join(sorted(rows, key=str.lower)) + "\n"
+    (ROOT / "THIRD-PARTY-LICENSES.txt").write_text(text, encoding="utf-8", newline="\n")
+    print(f"{len(rows)} crates")
+
+
+if __name__ == "__main__":
+    main()

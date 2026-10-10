@@ -1,0 +1,96 @@
+# Builds Idlerx.exe from the repository source in a clean GitHub environment
+# and creates a DRAFT release with the files. The draft only becomes public
+# when someone reviews and publishes it manually.
+#
+# Trigger: pushing a vX.Y.Z tag (or manually, only to test the build - in
+# that case no release is created).
+#
+# Third-party actions are pinned by commit hash (not by tag, which can be
+# moved).
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: write # create the draft release
+      id-token: write # sign the build provenance attestation (Sigstore)
+      attestations: write # store the attestation in this repository
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # rust/rust-toolchain.toml selects the MSVC toolchain (the WebView2
+      # loader is linked statically only with MSVC)
+      - name: Rust toolchain
+        shell: pwsh
+        run: |
+          cd rust
+          rustup show active-toolchain
+
+      - name: Tag matches the Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $versao = (Select-String -Path rust/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ("v$versao" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match version $versao in Cargo.toml."
+          }
+
+      # runs the tests, builds and checks the binary (the same script as the
+      # local build)
+      - name: Release build
+        shell: pwsh
+        run: ./rust/build-release.ps1
+
+      - name: Assemble the files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item rust/target/release/idlerx.exe dist/Idlerx.exe
+          Copy-Item THIRD-PARTY-LICENSES.txt, LICENSE dist/
+          $hash = (Get-FileHash -Algorithm SHA256 dist/Idlerx.exe).Hash
+          "Idlerx.exe SHA-256: ``$hash``" >> $env:GITHUB_STEP_SUMMARY
+
+      # signed proof that Idlerx.exe was built by this workflow from this
+      # commit; anyone can check it with:
+      #   gh attestation verify Idlerx.exe --repo Antxj/Idlerx
+      - name: Build provenance attestation
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/Idlerx.exe
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Idlerx
+          path: dist/
+          if-no-files-found: error
+
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # tag pushed again (e.g. moved to another commit): the release already
+          # exists, so do not create a second draft with the same name
+          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "A release for $env:GITHUB_REF_NAME already exists; no new draft was created." >> $env:GITHUB_STEP_SUMMARY
+            exit 0
+          }
+          gh release create $env:GITHUB_REF_NAME dist/Idlerx.exe `
+            dist/THIRD-PARTY-LICENSES.txt dist/LICENSE `
+            --repo $env:GITHUB_REPOSITORY --draft `
+            --title "Idlerx $env:GITHUB_REF_NAME" --generate-notes
