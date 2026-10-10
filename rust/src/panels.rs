@@ -14,7 +14,7 @@
 //! window message loop. Nothing waits in a nested message loop - creating
 //! several pages back to back that way (as wry does) can hang the app.
 
-use crate::config::{self, Account};
+use crate::config::{self, Account, Theme};
 use eframe::egui;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
@@ -186,13 +186,7 @@ impl Panel {
         unsafe {
             controller.SetIsVisible(false)?;
             if let Ok(c2) = controller.cast::<ICoreWebView2Controller2>() {
-                let (r, g, b) = if dark { (24, 24, 27) } else { (244, 244, 245) };
-                let _ = c2.SetDefaultBackgroundColor(COREWEBVIEW2_COLOR {
-                    A: 255,
-                    R: r,
-                    G: g,
-                    B: b,
-                });
+                let _ = c2.SetDefaultBackgroundColor(background(dark));
             }
             let webview = controller.CoreWebView2()?;
 
@@ -312,6 +306,29 @@ impl Panel {
             unsafe {
                 let _ = s4.SetIsPasswordAutosaveEnabled(on);
                 let _ = s4.SetIsGeneralAutofillEnabled(on);
+            }
+        }
+    }
+
+    /// Follows the app's theme instead of Windows': the pages' preferred
+    /// color scheme (sites with a dark mode use it) and the background shown
+    /// while a page loads.
+    pub fn set_theme(&self, theme: Theme, dark: bool) {
+        let scheme = match theme {
+            Theme::System => COREWEBVIEW2_PREFERRED_COLOR_SCHEME_AUTO,
+            Theme::Dark => COREWEBVIEW2_PREFERRED_COLOR_SCHEME_DARK,
+            Theme::Light => COREWEBVIEW2_PREFERRED_COLOR_SCHEME_LIGHT,
+        };
+        unsafe {
+            if let Ok(profile) = self
+                .webview
+                .cast::<ICoreWebView2_13>()
+                .and_then(|w| w.Profile())
+            {
+                let _ = profile.SetPreferredColorScheme(scheme);
+            }
+            if let Ok(c2) = self.controller.cast::<ICoreWebView2Controller2>() {
+                let _ = c2.SetDefaultBackgroundColor(background(dark));
             }
         }
     }
@@ -467,6 +484,17 @@ impl Panel {
 
     pub fn take_hotkey(&self) -> Option<Hotkey> {
         self.hotkey.take()
+    }
+}
+
+/// Page background while it loads (same as the app's panels).
+fn background(dark: bool) -> COREWEBVIEW2_COLOR {
+    let (r, g, b) = if dark { (24, 24, 27) } else { (244, 244, 245) };
+    COREWEBVIEW2_COLOR {
+        A: 255,
+        R: r,
+        G: g,
+        B: b,
     }
 }
 

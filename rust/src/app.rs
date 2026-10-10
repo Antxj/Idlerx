@@ -119,6 +119,8 @@ pub struct App {
     keep_active: bool,
     /// "Restart now" was clicked.
     restart: bool,
+    /// Theme last applied to the pages (setting, dark).
+    page_theme: Option<(Theme, bool)>,
     /// Economy mode: main frame id -> page processes.
     renderers: Rc<RefCell<HashMap<u32, Vec<u32>>>>,
     metrics: Metrics,
@@ -179,6 +181,7 @@ impl App {
             economy,
             keep_active,
             restart: false,
+            page_theme: None,
             renderers: Rc::new(RefCell::new(HashMap::new())),
             metrics,
             runtime: panels::runtime_version(),
@@ -261,6 +264,7 @@ impl App {
             self.queue.retain(|q| q != &id);
             match result {
                 Ok(p) if self.cfg.account(&id).is_some() => {
+                    p.set_theme(self.cfg.theme, Self::dark(ctx));
                     self.panels.insert(id, p);
                 }
                 Ok(_) => {} // removed meanwhile: the page is closed here
@@ -2521,6 +2525,15 @@ impl eframe::App for App {
         self.track_window(&ctx);
 
         let dark = ui.visuals().dark_mode;
+        // the app's theme prevails over Windows' in the pages too (also when
+        // "System" and Windows switches between light and dark)
+        let theme = (self.cfg.theme, Self::dark(&ctx));
+        if self.page_theme != Some(theme) {
+            self.page_theme = Some(theme);
+            for p in self.panels.values() {
+                p.set_theme(theme.0, theme.1);
+            }
+        }
         let mut actions = Vec::new();
         let mut placements = HashMap::new();
 
