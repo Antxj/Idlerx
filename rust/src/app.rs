@@ -119,6 +119,9 @@ pub struct App {
     keep_active: bool,
     /// "Restart now" was clicked.
     restart: bool,
+    /// The window was shown (maximized when it was closed maximized).
+    window_shown: bool,
+    created: Instant,
     /// Theme last applied to the pages (setting, dark).
     page_theme: Option<(Theme, bool)>,
     /// Economy mode: main frame id -> page processes.
@@ -182,6 +185,8 @@ impl App {
             keep_active,
             restart: false,
             page_theme: None,
+            window_shown: false,
+            created: Instant::now(),
             renderers: Rc::new(RefCell::new(HashMap::new())),
             metrics,
             runtime: panels::runtime_version(),
@@ -587,20 +592,34 @@ impl App {
         }
     }
 
+    fn show_window(&mut self, ctx: &egui::Context) {
+        if self.window_shown {
+            return;
+        }
+        self.window_shown = true;
+        if self.cfg.window_maximized {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        }
+    }
+
     fn track_window(&mut self, ctx: &egui::Context) {
-        let (size, maximized, close) = ctx.input(|i| {
+        let (size, maximized, minimized, close) = ctx.input(|i| {
             let v = i.viewport();
             (
                 v.inner_rect.map(|r| r.size()),
                 v.maximized.unwrap_or(false),
+                v.minimized.unwrap_or(false),
                 v.close_requested(),
             )
         });
-        if maximized != self.cfg.window_maximized {
+        // the first moments still show the window being created/maximized
+        let settled = self.created.elapsed() >= Duration::from_secs(2) && !minimized;
+        if settled && maximized != self.cfg.window_maximized {
             self.cfg.window_maximized = maximized;
             self.mark_dirty();
         }
-        if let (Some(s), false) = (size, maximized) {
+        if let (Some(s), false, true) = (size, maximized, settled) {
             let s = [s.x.round(), s.y.round()];
             if s[0] > 100.0 && self.cfg.window_size != Some(s) {
                 self.cfg.window_size = Some(s);
@@ -2522,6 +2541,7 @@ impl eframe::App for App {
         self.open_next(&ctx);
         self.poll(&ctx);
         self.keyboard(&ctx);
+        self.show_window(&ctx);
         self.track_window(&ctx);
 
         let dark = ui.visuals().dark_mode;

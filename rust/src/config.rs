@@ -148,7 +148,7 @@ impl Default for Config {
             economy: true,
             save_passwords: true,
             window_size: None,
-            window_maximized: false,
+            window_maximized: true,
             pending_delete: Vec::new(),
         }
     }

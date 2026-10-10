@@ -45,7 +45,11 @@ fn main() -> eframe::Result<()> {
         .with_app_id("Idlerx")
         .with_inner_size(size)
         .with_min_inner_size([720.0, 480.0])
-        .with_maximized(cfg.window_maximized)
+        // a maximized window is created hidden at its normal size and only
+        // maximized and shown on the first frame: maximizing at creation let
+        // the saved size win, leaving a "maximized" window that does not
+        // fill the screen
+        .with_visible(!cfg.window_maximized)
         .with_icon(egui::IconData {
             rgba: ICON_RGBA.to_vec(),
             width: 64,
@@ -53,6 +57,7 @@ fn main() -> eframe::Result<()> {
         });
     let options = eframe::NativeOptions {
         viewport,
+        centered: true,
         ..Default::default()
     };
 
