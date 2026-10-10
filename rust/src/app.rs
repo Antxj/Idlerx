@@ -638,7 +638,7 @@ impl App {
                     RichText::new(tr!("+ Nova conta", "+ New account")).color(Color32::WHITE),
                 )
                 .fill(ACCENT);
-                if ui.add(b).on_hover_text("Ctrl+N").clicked() {
+                if ui.add(b).side_tip("Ctrl+N").clicked() {
                     actions.push(Action::NewAccount);
                 }
             });
@@ -662,7 +662,7 @@ impl App {
                             egui::Button::new(RichText::new(tr!("+ Grupo", "+ Group")).small())
                                 .frame(false),
                         )
-                        .on_hover_text(tr!(
+                        .side_tip(tr!(
                             "Criar um grupo para organizar as contas",
                             "Create a group to organize the accounts"
                         ))
@@ -737,7 +737,7 @@ impl App {
             ui.horizontal(|ui| {
                 if ui
                     .add(egui::Button::new("⚙").frame(false))
-                    .on_hover_text(tr!("Configurações", "Settings"))
+                    .side_tip(tr!("Configurações", "Settings"))
                     .clicked()
                 {
                     self.dialog = Some(Dialog::Settings);
@@ -789,11 +789,15 @@ impl App {
                         metrics::fmt_memory(total.memory.saturating_sub(mem))
                     );
                     ui.label(RichText::new(text).small().color(weak(dark)))
-                        .on_hover_text(detail);
+                        .side_tip(detail);
                     if self.economy {
-                        leaf(ui).on_hover_text(tr!(
-                            "Modo econômico ativado: um navegador compartilhado por todas as contas",
-                            "Economy mode on: one browser shared by all accounts"
+                        leaf(ui).side_tip(tr!(
+                            "Modo econômico ativado\n\n\
+                             Um navegador compartilhado por todas as contas, cada uma \
+                             no seu perfil. Pode ser desligado em Configurações.",
+                            "Economy mode on\n\n\
+                             One browser shared by all accounts, each in its own \
+                             profile. It can be turned off in Settings."
                         ));
                     }
                 });
@@ -964,9 +968,7 @@ impl App {
             } else {
                 ("▶", tr!("Abrir", "Open"))
             };
-            let b = ui
-                .put(r, egui::Button::new(icon).small())
-                .on_hover_text(hint);
+            let b = ui.put(r, egui::Button::new(icon).small()).side_tip(hint);
             if b.clicked() {
                 button_clicked = true;
                 actions.push(if open {
@@ -985,7 +987,7 @@ impl App {
             }
         }
 
-        let resp = resp.on_hover_text(&a.url);
+        let resp = resp.side_tip(&a.url);
         resp.context_menu(|ui| self.account_menu(ui, a, open, actions));
     }
 
@@ -1156,7 +1158,7 @@ impl App {
                 );
                 x -= 26.0;
                 ui.put(r, egui::Button::new(icon).small())
-                    .on_hover_text(hint)
+                    .side_tip(hint)
                     .clicked()
             };
             if button("⏸", tr!("Pausar todas do grupo", "Pause all in the group")) {
@@ -1185,7 +1187,7 @@ impl App {
             ids.len(),
             metrics::fmt_memory(mem)
         );
-        let resp = resp.on_hover_text(tip);
+        let resp = resp.side_tip(tip);
         resp.context_menu(|ui| {
             if ui.button(tr!("▶  Abrir todas", "▶  Open all")).clicked() {
                 actions.push(Action::OpenGroup(g.id.clone()));
@@ -1286,7 +1288,7 @@ impl App {
                     enabled,
                     egui::Button::new(RichText::new(icon).size(15.0)).frame(false),
                 )
-                .on_hover_text(hint)
+                .bar_tip(hint)
                 .clicked()
             };
             if nav(
@@ -1318,7 +1320,7 @@ impl App {
             ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                 if ui
                     .add(egui::Button::new("⛶").frame(false))
-                    .on_hover_text(tr!(
+                    .bar_tip(tr!(
                         "Modo foco: só os jogos na tela (F11)",
                         "Focus mode: only the games on screen (F11)"
                     ))
@@ -1332,7 +1334,7 @@ impl App {
                     let t = RichText::new(trf!("⬆ Versão {n}", "⬆ Version {n}")).color(ACCENT);
                     if ui
                         .link(t)
-                        .on_hover_text(tr!("Nova versão disponível", "New version available"))
+                        .bar_tip(tr!("Nova versão disponível", "New version available"))
                         .clicked()
                     {
                         self.dialog = Some(Dialog::Update);
@@ -1351,7 +1353,7 @@ impl App {
                     };
                     if ui
                         .add(egui::Button::new(icon).frame(false))
-                        .on_hover_text(hint)
+                        .bar_tip(hint)
                         .clicked()
                     {
                         actions.push(Action::ToggleMute(id.clone()));
@@ -1365,7 +1367,7 @@ impl App {
                         };
                         if ui
                             .add(egui::Button::new("+").frame(false))
-                            .on_hover_text(tr!("Aumentar zoom", "Zoom in"))
+                            .bar_tip(tr!("Aumentar zoom", "Zoom in"))
                             .clicked()
                         {
                             set(zoom + 0.1, self);
@@ -1377,7 +1379,7 @@ impl App {
                                     .frame(false)
                                     .min_size(Vec2::new(44.0, 0.0)),
                             )
-                            .on_hover_text(tr!(
+                            .bar_tip(tr!(
                                 "Zoom desta conta (clique para 100%)",
                                 "Zoom of this account (click for 100%)"
                             ))
@@ -1388,7 +1390,7 @@ impl App {
                         }
                         if ui
                             .add(egui::Button::new("−").frame(false))
-                            .on_hover_text(tr!("Diminuir zoom", "Zoom out"))
+                            .bar_tip(tr!("Diminuir zoom", "Zoom out"))
                             .clicked()
                         {
                             set(zoom - 0.1, self);
@@ -1446,7 +1448,7 @@ impl App {
                 self.grid_menu(ui, actions)
             })
             .response
-            .on_hover_text(tr!("Formato da grade", "Grid shape"));
+            .bar_tip(tr!("Formato da grade", "Grid shape"));
 
             // open accounts that do not fit in a fixed grid
             let ids = self.cfg.grid_accounts(|id| self.is_open_or_opening(id));
@@ -1461,7 +1463,7 @@ impl App {
                         .small()
                         .color(FAVORITE),
                 )
-                .on_hover_text(trf!(
+                .bar_tip(trf!(
                     "Abertas, mas fora da grade (continuam rodando):\n{}\n\nArraste uma delas para um quadro para trocar.",
                     "Open but outside the grid (still running):\n{}\n\nDrag one onto a cell to swap.",
                     names.join("\n")
@@ -1469,12 +1471,12 @@ impl App {
             }
         }
         ui.selectable_value(&mut self.cfg.layout, Layout::Grid, tr!("⊞ Grade", "⊞ Grid"))
-            .on_hover_text(tr!(
+            .bar_tip(tr!(
                 "Várias contas abertas lado a lado",
                 "Several open accounts side by side"
             ));
         ui.selectable_value(&mut self.cfg.layout, Layout::Tabs, tr!("▣ Uma", "▣ Single"))
-            .on_hover_text(tr!("Uma conta por vez", "One account at a time"));
+            .bar_tip(tr!("Uma conta por vez", "One account at a time"));
         if before != (self.cfg.layout, self.cfg.grid_cols, self.cfg.grid_rows) {
             self.mark_dirty();
         }
@@ -1883,7 +1885,7 @@ impl App {
             );
             x -= 26.0;
             ui.put(r, egui::Button::new(icon).frame(false))
-                .on_hover_text(hint)
+                .bar_tip(hint)
                 .clicked()
         };
         if button("⛶", tr!("Mostrar sozinha", "Show alone")) {
@@ -2697,6 +2699,53 @@ fn overlay_rects(ctx: &egui::Context) -> Vec<Rect> {
             .filter_map(|l| m.area_rect(l.id))
             .collect()
     })
+}
+
+/// Tooltips of the side list. A normal tooltip follows the pointer and can
+/// spill over the pages, which cover it; these stay inside the side list.
+trait SideTip {
+    fn side_tip(self, text: impl Into<egui::WidgetText>) -> Self;
+}
+
+impl SideTip for egui::Response {
+    fn side_tip(self, text: impl Into<egui::WidgetText>) -> Self {
+        let band = Rect::from_x_y_ranges(6.0..=SIDEBAR_WIDTH - 6.0, self.rect.y_range());
+        let mut tip = egui::Tooltip::for_enabled(&self);
+        tip.popup = tip
+            .popup
+            .anchor(band)
+            .align(egui::RectAlign::BOTTOM_START)
+            .align_alternatives(&[egui::RectAlign::TOP_START])
+            .width(SIDEBAR_WIDTH - 28.0);
+        let text = text.into();
+        tip.show(|ui| {
+            ui.label(text);
+        });
+        self
+    }
+}
+
+/// Tooltips of the top bar and of the grid cell headers: shown beside the
+/// button, inside the bar, instead of below it (where a page would cover them).
+trait BarTip {
+    fn bar_tip(self, text: impl Into<egui::WidgetText>) -> Self;
+}
+
+impl BarTip for egui::Response {
+    fn bar_tip(self, text: impl Into<egui::WidgetText>) -> Self {
+        let mut tip = egui::Tooltip::for_enabled(&self);
+        tip.popup = tip
+            .popup
+            .align(egui::RectAlign::LEFT)
+            .align_alternatives(&[egui::RectAlign::RIGHT])
+            .gap(6.0)
+            .width(420.0);
+        let text = text.into();
+        tip.show(|ui| {
+            ui.label(text);
+        });
+        self
+    }
 }
 
 /// Small green leaf (economy mode), drawn so it does not depend on the font.
