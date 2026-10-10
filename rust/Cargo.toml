@@ -10,7 +10,7 @@ repository = "https://github.com/Antxj/Idlerx"
 eframe = { version = "0.36", default-features = false, features = ["wgpu", "default_fonts"] }
 webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation"] }
-windows-core = "0.62"
+windows-core = "0.100"
 raw-window-handle = "0.6"
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 serde = { version = "1", features = ["derive"] }
