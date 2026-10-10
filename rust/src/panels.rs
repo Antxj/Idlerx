@@ -67,6 +67,7 @@ pub fn open(
     account: &Account,
     keep_active: bool,
     economy: bool,
+    save_passwords: bool,
     dark: bool,
     ready: impl Fn() + 'static,
 ) -> PanelSlot {
@@ -106,7 +107,7 @@ pub fn open(
                             controller.ok_or_else(|| "WebView2 returned no page".to_string())
                         })
                         .and_then(|c| {
-                            Panel::setup(c, &env2, parent, &account, dark)
+                            Panel::setup(c, &env2, parent, &account, save_passwords, dark)
                                 .map_err(|e| e.to_string())
                         });
                     *s2.borrow_mut() = Some(r);
@@ -179,6 +180,7 @@ impl Panel {
         env: &ICoreWebView2Environment,
         parent: isize,
         account: &Account,
+        save_passwords: bool,
         dark: bool,
     ) -> windows_core::Result<Panel> {
         unsafe {
@@ -197,9 +199,6 @@ impl Panel {
             let settings = webview.Settings()?;
             let _ = settings.SetIsStatusBarEnabled(false);
             let _ = settings.SetAreDevToolsEnabled(cfg!(debug_assertions));
-            if let Ok(s4) = settings.cast::<ICoreWebView2Settings4>() {
-                let _ = s4.SetIsGeneralAutofillEnabled(false);
-            }
 
             let mut pid = 0u32;
             let _ = webview.BrowserProcessId(&mut pid);
@@ -247,6 +246,7 @@ impl Panel {
                 bounds: None,
                 visible: false,
             };
+            p.set_save_passwords(save_passwords);
             p.set_muted(account.muted);
             if (account.zoom - 1.0).abs() > 0.001 {
                 p.set_zoom(account.zoom);
@@ -298,6 +298,21 @@ impl Panel {
     fn memory_level(&self, level: COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL) {
         if let Ok(w) = self.webview.cast::<ICoreWebView2_19>() {
             let _ = unsafe { w.SetMemoryUsageTargetLevel(level) };
+        }
+    }
+
+    /// Edge's password manager: offers to save the login and fills it in
+    /// next time (also user names and other form fields). Stored in the
+    /// account's profile, encrypted by Windows; no sync.
+    pub fn set_save_passwords(&self, on: bool) {
+        let Ok(settings) = (unsafe { self.webview.Settings() }) else {
+            return;
+        };
+        if let Ok(s4) = settings.cast::<ICoreWebView2Settings4>() {
+            unsafe {
+                let _ = s4.SetIsPasswordAutosaveEnabled(on);
+                let _ = s4.SetIsGeneralAutofillEnabled(on);
+            }
         }
     }
 

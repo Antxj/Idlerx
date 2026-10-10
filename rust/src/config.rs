@@ -121,6 +121,9 @@ pub struct Config {
     pub keep_active: bool,
     /// Economy mode: one shared browser, one profile per account.
     pub economy: bool,
+    /// The browser offers to save logins and fills them in (per account,
+    /// encrypted by Windows, no sync).
+    pub save_passwords: bool,
     pub window_size: Option<[f32; 2]>,
     pub window_maximized: bool,
     /// Profile folders still to be deleted (they were in use).
@@ -143,6 +146,7 @@ impl Default for Config {
             restore_open: true,
             keep_active: true,
             economy: true,
+            save_passwords: true,
             window_size: None,
             window_maximized: false,
             pending_delete: Vec::new(),
@@ -633,6 +637,7 @@ mod tests {
         assert_eq!(c.accounts[0].zoom, 1.0);
         assert!(c.accounts[0].in_grid);
         assert!(c.check_updates && c.restore_open && c.keep_active && c.economy);
+        assert!(c.save_passwords);
         let a = &c.accounts[0];
         assert_eq!(a.start_url(), "https://a.com");
     }

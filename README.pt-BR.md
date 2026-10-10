@@ -47,6 +47,10 @@ Windows (dá para fixar em **Configurações** ⚙ › Idioma).
 - **Barra de endereço** com voltar, avançar e recarregar: é só colar a URL de
   qualquer jogo
 - **Favoritar, renomear, reordenar** (arrastando na lista)
+- **Senhas salvas** (ligado por padrão): o navegador oferece salvar o login
+  de cada conta e preenche sozinho na próxima vez. Cada conta tem as
+  próprias, guardadas neste computador e criptografadas pelo Windows, como
+  no Chrome e no Edge (sem sincronização)
 - **Pausar** uma conta fecha a página e libera a memória; ao abrir de novo
   ela continua logada
 - **Limpar dados** (sair da conta) recomeça a conta do zero, sem removê-la

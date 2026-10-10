@@ -286,6 +286,7 @@ impl App {
                         self.cfg.keep_active
                     },
                     self.economy,
+                    self.cfg.save_passwords,
                     Self::dark(ctx),
                     move || repaint.request_repaint(),
                 );
@@ -2149,8 +2150,8 @@ impl App {
                     ctx,
                     &trf!("Limpar os dados de \"{name}\"?", "Clear the data of \"{name}\"?"),
                     tr!(
-                        "Login, cookies e cache desta conta serão apagados: ela volta como nova e você precisará entrar no jogo de novo.",
-                        "Login, cookies and cache of this account will be deleted: it starts fresh and you will need to log in to the game again."
+                        "Login, senhas salvas, cookies e cache desta conta serão apagados: ela volta como nova e você precisará entrar no jogo de novo.",
+                        "Login, saved passwords, cookies and cache of this account will be deleted: it starts fresh and you will need to log in to the game again."
                     ),
                     tr!("Limpar dados", "Clear data"),
                 ) {
@@ -2301,6 +2302,31 @@ impl App {
                      Vale para as contas abertas depois da mudança.",
                     "Stops the browser from slowing down hidden or covered pages. \
                      Applies to accounts opened after the change."
+                ))
+                .small()
+                .color(weak(dark)),
+            );
+
+            ui.add_space(6.0);
+            if ui
+                .checkbox(
+                    &mut self.cfg.save_passwords,
+                    tr!("Salvar senhas das contas", "Save the accounts' passwords"),
+                )
+                .changed()
+            {
+                for p in self.panels.values() {
+                    p.set_save_passwords(self.cfg.save_passwords);
+                }
+            }
+            ui.label(
+                RichText::new(tr!(
+                    "O navegador oferece salvar o login de cada conta e preenche sozinho na \
+                     próxima vez. Cada conta tem as próprias senhas, guardadas neste computador \
+                     e criptografadas pelo Windows (como no Chrome e no Edge); sem sincronização.",
+                    "The browser offers to save each account's login and fills it in next time. \
+                     Each account has its own passwords, kept on this computer and encrypted by \
+                     Windows (like Chrome and Edge); no sync."
                 ))
                 .small()
                 .color(weak(dark)),

@@ -47,6 +47,10 @@ the Windows language (it can be set under **Settings** ⚙ › Language).
 - **Address bar** with back, forward and reload: just paste the URL of any
   game
 - **Favorite, rename, reorder** (drag in the list)
+- **Saved passwords** (on by default): the browser offers to save each
+  account's login and fills it in next time. Each account has its own,
+  kept on this computer and encrypted by Windows, like Chrome and Edge
+  (no sync)
 - **Pause** an account to close its page and free its memory; when opened
   again it is still logged in
 - **Clear data** (log out) starts the account fresh without removing it
