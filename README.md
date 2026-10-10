@@ -86,13 +86,14 @@ data, remove).
 
 ## For developers
 
-Requirements: [Rust](https://rustup.rs) with the **MSVC** toolchain
-(`rust/rust-toolchain.toml` already selects it) and Visual Studio Build
-Tools. The GNU toolchain does not work: with it the WebView2 loader becomes a
-separate DLL.
+Requirements: [Rust](https://rustup.rs) with the **MSVC** toolchain and
+Visual Studio Build Tools. The GNU toolchain does not work (the WebView2
+loader would become a separate DLL); the build stops with a message if it is
+the active one.
 
 ```powershell
 cd rust
+rustup override set stable-x86_64-pc-windows-msvc   # only if MSVC is not your default
 cargo test
 cargo run
 .\build-release.ps1      # tests + release without local paths + checks

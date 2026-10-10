@@ -22,7 +22,8 @@ jobs:
         shell: pwsh
         working-directory: rust
         run: |
-          rustup component add clippy rustfmt
+          rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal --component clippy,rustfmt
+          rustup default stable-x86_64-pc-windows-msvc
           cargo fmt --check
           if ($LASTEXITCODE -ne 0) { throw "Run cargo fmt." }
           cargo clippy --locked --all-targets -- -D warnings

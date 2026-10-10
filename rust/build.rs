@@ -11,6 +11,15 @@ fn main() {
     if std::env::var_os("CARGO_CFG_WINDOWS").is_none() {
         return;
     }
+    // with the GNU toolchain the WebView2 loader is a separate DLL (and the
+    // C runtime is not static): the single executable needs MSVC
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("gnu") {
+        panic!(
+            "Idlerx must be built with the MSVC toolchain: run \
+             `rustup override set stable-x86_64-pc-windows-msvc` in this folder \
+             (requires Visual Studio Build Tools)"
+        );
+    }
     let version = std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION");
     let mut n: Vec<u32> = version
         .split(['-', '+'])

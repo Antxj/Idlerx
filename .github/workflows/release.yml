@@ -30,13 +30,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # rust/rust-toolchain.toml selects the MSVC toolchain (the WebView2
-      # loader is linked statically only with MSVC)
-      - name: Rust toolchain
+      # MSVC: the WebView2 loader is linked statically only with it
+      - name: Rust toolchain (MSVC)
         shell: pwsh
         run: |
-          cd rust
-          rustup show active-toolchain
+          rustup toolchain install stable-x86_64-pc-windows-msvc --profile minimal
+          rustup default stable-x86_64-pc-windows-msvc
 
       - name: Tag matches the Cargo.toml version
         if: startsWith(github.ref, 'refs/tags/')

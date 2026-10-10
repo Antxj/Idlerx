@@ -85,12 +85,13 @@ tirar da grade, limpar dados, remover).
 
 ## Para desenvolvedores
 
-Requisitos: [Rust](https://rustup.rs) com o toolchain **MSVC** (o
-`rust/rust-toolchain.toml` já seleciona) e o Visual Studio Build Tools. O
-toolchain GNU não serve: com ele o loader do WebView2 vira uma DLL separada.
+Requisitos: [Rust](https://rustup.rs) com o toolchain **MSVC** e o Visual
+Studio Build Tools. O toolchain GNU não serve (o loader do WebView2 viraria
+uma DLL separada); se ele estiver ativo, o build para com uma mensagem.
 
 ```powershell
 cd rust
+rustup override set stable-x86_64-pc-windows-msvc   # só se o MSVC não for o seu padrão
 cargo test
 cargo run
 .\build-release.ps1      # testes + release sem caminhos locais + verificações
