@@ -588,6 +588,7 @@ impl App {
                 vec![p.pid]
             };
             pids.insert(id.clone(), roots);
+            p.request_fps_rate();
             if p.playing_audio() {
                 self.audio.insert(id.clone());
             }

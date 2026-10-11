@@ -372,35 +372,54 @@ impl App {
             );
 
             ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                ui.label(tr!(
-                    "Quadros por segundo das contas não selecionadas",
-                    "Frames per second of the accounts not selected"
-                ));
-                let label = |n: u32| {
-                    if n == 0 {
-                        tr!("Sem limite", "No limit").to_string()
-                    } else {
-                        format!("{n} FPS")
-                    }
-                };
-                egui::ComboBox::from_id_salt("fps_limit")
-                    .selected_text(label(self.cfg.fps_limit))
-                    .width(110.0)
-                    .show_ui(ui, |ui| {
-                        for n in [0u32, 60, 30, 15, 10, 5] {
-                            ui.selectable_value(&mut self.cfg.fps_limit, n, label(n));
-                        }
-                    });
-            });
+            let label = |n: u32| {
+                if n == 0 {
+                    tr!("Sem limite", "No limit").to_string()
+                } else {
+                    format!("{n} FPS")
+                }
+            };
+            egui::Grid::new("fps_grid")
+                .num_columns(2)
+                .spacing([16.0, 6.0])
+                .show(ui, |ui| {
+                    ui.label(tr!(
+                        "Quadros por segundo: conta selecionada",
+                        "Frames per second: selected account"
+                    ));
+                    egui::ComboBox::from_id_salt("fps_selected")
+                        .selected_text(label(self.cfg.fps_selected))
+                        .width(110.0)
+                        .show_ui(ui, |ui| {
+                            for n in [0u32, 120, 60, 30, 15] {
+                                ui.selectable_value(&mut self.cfg.fps_selected, n, label(n));
+                            }
+                        });
+                    ui.end_row();
+                    ui.label(tr!(
+                        "Quadros por segundo: outras contas",
+                        "Frames per second: other accounts"
+                    ));
+                    egui::ComboBox::from_id_salt("fps_limit")
+                        .selected_text(label(self.cfg.fps_limit))
+                        .width(110.0)
+                        .show_ui(ui, |ui| {
+                            for n in [0u32, 60, 30, 15, 10, 5] {
+                                ui.selectable_value(&mut self.cfg.fps_limit, n, label(n));
+                            }
+                        });
+                    ui.end_row();
+                });
             ui.label(
                 RichText::new(tr!(
-                    "Jogos idle não precisam desenhar 60 vezes por segundo: limitar economiza bastante \
-                     CPU e GPU na grade. A conta selecionada desenha sem limite. Cada conta pode ter \
-                     o seu (botão direito › Quadros por segundo).",
-                    "Idle games do not need to draw 60 times a second: a limit saves a lot of CPU and \
-                     GPU in the grid. The selected account draws freely. Each account can have its \
-                     own (right click › Frames per second)."
+                    "Jogos idle não precisam desenhar 60 vezes por segundo (nem 144 ou 180, a \
+                     frequência do monitor): limitar economiza bastante CPU e GPU. Cada conta pode \
+                     ter o seu (botão direito › Quadros por segundo); o quadro da grade mostra \
+                     quantos ela realmente desenha.",
+                    "Idle games do not need to draw 60 times a second (nor 144 or 180, the monitor's \
+                     rate): a limit saves a lot of CPU and GPU. Each account can have its own \
+                     (right click › Frames per second); the grid cell shows how many it really \
+                     draws."
                 ))
                 .small()
                 .color(weak(dark)),

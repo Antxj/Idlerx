@@ -182,6 +182,9 @@ pub struct Panel {
     /// Frame limit last sent to the page, and "send again" (new document).
     fps_sent: Cell<Option<u32>>,
     fps_resend: Rc<Cell<bool>>,
+    /// Frames per second the page actually drew (measured inside it);
+    /// None until known or when the page does not animate.
+    fps_rate: Rc<Cell<Option<u32>>>,
 }
 
 impl Drop for Panel {
@@ -282,6 +285,7 @@ impl Panel {
                 visible: false,
                 fps_sent: Cell::new(None),
                 fps_resend,
+                fps_rate: Rc::new(Cell::new(None)),
             };
             p.set_save_passwords(save_passwords);
             p.set_muted(account.muted);
@@ -352,6 +356,32 @@ impl Panel {
                 &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
             )
         };
+    }
+
+    /// Asks the page how many frames it drew in the last second (the answer
+    /// arrives asynchronously, read with [`Panel::fps_rate`]).
+    pub fn request_fps_rate(&self) {
+        let out = self.fps_rate.clone();
+        let handler = ExecuteScriptCompletedHandler::create(Box::new(move |res, json| {
+            let rate = res
+                .ok()
+                .and_then(|_| json.trim().parse::<f64>().ok())
+                .filter(|r| *r >= 0.0)
+                .map(|r| r.round() as u32);
+            out.set(rate);
+            Ok(())
+        }));
+        let _ = unsafe {
+            self.webview.ExecuteScript(
+                &HSTRING::from("window.__idlerxFps ? window.__idlerxFps.rate : -1"),
+                &handler,
+            )
+        };
+    }
+
+    /// Frames per second the page actually drew (last measurement).
+    pub fn fps_rate(&self) -> Option<u32> {
+        self.fps_rate.get()
     }
 
     /// Edge's password manager: offers to save the login and fills it in

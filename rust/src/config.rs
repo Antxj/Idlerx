@@ -28,8 +28,9 @@ pub struct Account {
     pub open: bool,
     /// Group in the side list (None = no group).
     pub group: Option<String>,
-    /// Frames per second of this account: None = automatic (no limit while
-    /// selected, `Config::fps_limit` otherwise); Some(0) = never limited.
+    /// Frames per second of this account: None = automatic
+    /// (`Config::fps_selected` while selected, `Config::fps_limit`
+    /// otherwise); Some(0) = never limited.
     pub fps: Option<u32>,
 }
 
@@ -131,6 +132,9 @@ pub struct Config {
     /// Frames per second of the accounts that are not selected (0 = no
     /// limit). Idle games do not need 60 drawings a second.
     pub fps_limit: u32,
+    /// Frames per second of the selected account (0 = no limit): without a
+    /// limit it would follow the monitor (144, 180 Hz...).
+    pub fps_selected: u32,
     pub window_size: Option<[f32; 2]>,
     pub window_maximized: bool,
     /// Profile folders still to be deleted (they were in use).
@@ -155,6 +159,7 @@ impl Default for Config {
             economy: true,
             save_passwords: true,
             fps_limit: 15,
+            fps_selected: 60,
             window_size: None,
             window_maximized: true,
             pending_delete: Vec::new(),
@@ -258,7 +263,7 @@ impl Config {
     pub fn fps_for(&self, a: &Account, selected: bool) -> u32 {
         match a.fps {
             Some(n) => n,
-            None if selected => 0,
+            None if selected => self.fps_selected,
             None => self.fps_limit,
         }
     }
@@ -681,7 +686,9 @@ mod tests {
         let mut c = Config::default();
         account_for_test(&mut c, "a", None);
         let a = c.accounts[0].clone();
-        assert_eq!(c.fps_for(&a, true), 0); // selected: no limit
+        assert_eq!(c.fps_for(&a, true), 60); // selected: up to 60
+        c.fps_selected = 0;
+        assert_eq!(c.fps_for(&a, true), 0); // selected without limit
         assert_eq!(c.fps_for(&a, false), 15);
         c.fps_limit = 0;
         assert_eq!(c.fps_for(&a, false), 0);

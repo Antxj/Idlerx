@@ -305,10 +305,14 @@ impl App {
                 metrics::fmt_duration(p.started.elapsed()),
                 usage_text(u)
             );
+            // frames actually drawn, measured inside the page (and the limit)
             let selected = self.cfg.selected.as_deref() == Some(a.id.as_str());
-            let fps = self.cfg.fps_for(a, selected);
-            if fps > 0 {
-                usage.push_str(&format!(" · {fps} FPS"));
+            let limit = self.cfg.fps_for(a, selected);
+            match (p.fps_rate(), limit) {
+                (Some(rate), 0) => usage.push_str(&format!(" · {rate} FPS")),
+                (Some(rate), l) => usage.push_str(&format!(" · {rate}/{l} FPS")),
+                (None, l) if l > 0 => usage.push_str(&format!(" · ≤{l} FPS")),
+                _ => {}
             }
         }
 

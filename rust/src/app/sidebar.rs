@@ -450,14 +450,18 @@ impl App {
                 "      Frames per second (FPS)"
             ),
             |ui| {
-                let auto = trf!(
-                    "Automático (sem limite selecionada, {} nas outras)",
-                    "Automatic (no limit when selected, {} otherwise)",
-                    if self.cfg.fps_limit == 0 {
+                let n = |v: u32| {
+                    if v == 0 {
                         tr!("sem limite", "no limit").to_string()
                     } else {
-                        self.cfg.fps_limit.to_string()
+                        v.to_string()
                     }
+                };
+                let auto = trf!(
+                    "Automático ({} selecionada, {} nas outras)",
+                    "Automatic ({} when selected, {} otherwise)",
+                    n(self.cfg.fps_selected),
+                    n(self.cfg.fps_limit)
                 );
                 if ui.selectable_label(a.fps.is_none(), auto).clicked() {
                     actions.push(Action::SetFps(id(), None));

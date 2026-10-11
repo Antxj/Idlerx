@@ -76,10 +76,12 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
 
 ### Saving resources
 
-- **Frame limit** (15 FPS by default): idle games do not need to draw 60
-  (or 144, 180…) times a second. The selected account draws freely and the
-  others at the limit; each account can have its own (right click › Frames
-  per second). With four busy games in the grid, CPU use dropped by half
+- **Frame limit**: idle games do not need to draw 60 (or 144, 180… the
+  monitor's rate) times a second. By default the selected account draws up
+  to 60 FPS and the others up to 15; each account can have its own (right
+  click › Frames per second), and each grid cell shows how many frames it
+  really draws. With four busy pages in the grid, CPU use dropped from 25%
+  to 6%
 
 - **Economy mode** shares the browser, GPU and network processes among the
   accounts: with 5 accounts, 21 processes and ~1.5 GB instead of 41 and

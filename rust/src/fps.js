@@ -7,7 +7,26 @@
   if (window.__idlerxFps) return;
   const nativeRaf = window.requestAnimationFrame.bind(window);
   const nativeCancel = window.cancelAnimationFrame.bind(window);
-  const st = { fps: 0, next: 0, seq: 1e9, timers: new Map(), frames: new Map() };
+  // the browser's own timers, taken before the page loads: frameworks that
+  // wrap timers (Angular) do not see the limiter's work as page activity
+  const nativeSetTimeout = window.setTimeout.bind(window);
+  const nativeClearTimeout = window.clearTimeout.bind(window);
+  const nativeSetInterval = window.setInterval.bind(window);
+  const st = { fps: 0, next: 0, seq: 1e9, timers: new Map(), frames: new Map(), rate: -1 };
+
+  // frames actually drawn per second (shown by Idlerx): distinct animation
+  // frames whose callbacks ran during the last second
+  let counted = 0, lastFrame = -1, windowStart = performance.now();
+  const countFrame = (t) => {
+    if (t !== lastFrame) { lastFrame = t; counted++; }
+    const now = performance.now();
+    if (now - windowStart >= 1000) {
+      st.rate = Math.round(counted * 1000 / (now - windowStart));
+      counted = 0; windowStart = now;
+    }
+  };
+  // no animation for 3 s: nothing is being drawn
+  nativeSetInterval(() => { if (performance.now() - windowStart > 3000) { st.rate = 0; counted = 0; windowStart = performance.now(); } }, 3000);
 
   // the limit also goes to the iframes (games often draw inside one)
   st.set = (n) => {
@@ -19,15 +38,16 @@
   Object.defineProperty(window, '__idlerxFps', { value: st });
 
   window.requestAnimationFrame = function (cb) {
-    if (!st.fps) return nativeRaf(cb);
+    if (!st.fps) return nativeRaf((t) => { countFrame(t); cb(t); });
     const h = ++st.seq;
     const wait = Math.max(0, st.next - performance.now());
-    st.timers.set(h, setTimeout(() => {
+    st.timers.set(h, nativeSetTimeout(() => {
       st.timers.delete(h);
       st.frames.set(h, nativeRaf((t) => {
         st.frames.delete(h);
         const now = performance.now();
         if (now >= st.next) st.next = now + 1000 / st.fps;
+        countFrame(t);
         cb(t);
       }));
     }, wait));
@@ -35,7 +55,7 @@
   };
 
   window.cancelAnimationFrame = function (h) {
-    if (st.timers.has(h)) { clearTimeout(st.timers.get(h)); st.timers.delete(h); return; }
+    if (st.timers.has(h)) { nativeClearTimeout(st.timers.get(h)); st.timers.delete(h); return; }
     if (st.frames.has(h)) { nativeCancel(st.frames.get(h)); st.frames.delete(h); return; }
     nativeCancel(h);
   };
