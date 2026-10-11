@@ -159,7 +159,7 @@ impl Default for Config {
             economy: true,
             save_passwords: true,
             fps_limit: 30,
-            fps_selected: 30,
+            fps_selected: 60,
             window_size: None,
             window_maximized: true,
             pending_delete: Vec::new(),
@@ -686,7 +686,7 @@ mod tests {
         let mut c = Config::default();
         account_for_test(&mut c, "a", None);
         let a = c.accounts[0].clone();
-        assert_eq!(c.fps_for(&a, true), 30); // selected: up to 30
+        assert_eq!(c.fps_for(&a, true), 60); // selected: up to 60
         c.fps_selected = 0;
         assert_eq!(c.fps_for(&a, true), 0); // selected without limit
         assert_eq!(c.fps_for(&a, false), 30);

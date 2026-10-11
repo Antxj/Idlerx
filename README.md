@@ -77,8 +77,8 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
 ### Saving resources
 
 - **Frame limit**: idle games do not need to draw 60 (or 144, 180… the
-  monitor's rate) times a second. By default every account draws up to
-  30 FPS (the selected one and the others can be set apart in Settings);
+  monitor's rate) times a second. By default the selected account draws up
+  to 60 FPS and the others up to 30 (both can be changed in Settings);
   each account can also have its own (right click › Frames per second), and
   each grid cell shows how many frames it really draws. With four busy
   pages in the grid, limits of 60 (selected) and 15 (others) took CPU use

@@ -79,8 +79,8 @@ próprio progresso.</sub>
 
 - **Limite de quadros por segundo**: jogos idle não precisam desenhar 60
   (ou 144, 180… a frequência do monitor) vezes por segundo. Por padrão
-  todas as contas desenham até 30 FPS (a selecionada e as outras podem ser
-  ajustadas separadamente nas Configurações); cada conta também pode ter o
+  a conta selecionada desenha até 60 FPS e as outras até 30 (os dois valores
+  podem ser mudados nas Configurações); cada conta também pode ter o
   seu (botão direito › Quadros por segundo), e cada quadro da grade mostra
   quantos ela realmente desenha. Com quatro páginas animadas na grade,
   limites de 60 (selecionada) e 15 (outras) levaram a CPU de 25% para 6%
