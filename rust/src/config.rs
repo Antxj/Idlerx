@@ -158,8 +158,8 @@ impl Default for Config {
             keep_active: true,
             economy: true,
             save_passwords: true,
-            fps_limit: 15,
-            fps_selected: 60,
+            fps_limit: 30,
+            fps_selected: 30,
             window_size: None,
             window_maximized: true,
             pending_delete: Vec::new(),
@@ -686,10 +686,10 @@ mod tests {
         let mut c = Config::default();
         account_for_test(&mut c, "a", None);
         let a = c.accounts[0].clone();
-        assert_eq!(c.fps_for(&a, true), 60); // selected: up to 60
+        assert_eq!(c.fps_for(&a, true), 30); // selected: up to 30
         c.fps_selected = 0;
         assert_eq!(c.fps_for(&a, true), 0); // selected without limit
-        assert_eq!(c.fps_for(&a, false), 15);
+        assert_eq!(c.fps_for(&a, false), 30);
         c.fps_limit = 0;
         assert_eq!(c.fps_for(&a, false), 0);
         let mut b = a.clone();
@@ -722,7 +722,7 @@ mod tests {
         assert!(c.accounts[0].in_grid);
         assert!(c.check_updates && c.restore_open && c.keep_active && c.economy);
         assert!(c.save_passwords);
-        assert_eq!(c.fps_limit, 15);
+        assert_eq!(c.fps_limit, 30);
         assert_eq!(c.accounts[0].fps, None);
         let a = &c.accounts[0];
         assert_eq!(a.start_url(), "https://a.com");

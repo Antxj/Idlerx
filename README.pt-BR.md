@@ -78,11 +78,12 @@ próprio progresso.</sub>
 ### Economia de recursos
 
 - **Limite de quadros por segundo**: jogos idle não precisam desenhar 60
-  (ou 144, 180… a frequência do monitor) vezes por segundo. Por padrão a
-  conta selecionada desenha até 60 FPS e as outras até 15; cada conta pode
-  ter o seu (botão direito › Quadros por segundo), e cada quadro da grade
-  mostra quantos ela realmente desenha. Com quatro páginas animadas na
-  grade, o uso de CPU caiu de 25% para 6%
+  (ou 144, 180… a frequência do monitor) vezes por segundo. Por padrão
+  todas as contas desenham até 30 FPS (a selecionada e as outras podem ser
+  ajustadas separadamente nas Configurações); cada conta também pode ter o
+  seu (botão direito › Quadros por segundo), e cada quadro da grade mostra
+  quantos ela realmente desenha. Com quatro páginas animadas na grade,
+  limites de 60 (selecionada) e 15 (outras) levaram a CPU de 25% para 6%
 
 - O **modo econômico** compartilha os processos de navegador, GPU e rede
   entre as contas: com 5 contas, 21 processos e ~1,5 GB em vez de 41 e
