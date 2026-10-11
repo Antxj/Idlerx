@@ -128,6 +128,7 @@ enum Dialog {
     Update,
     ConfirmRemove(String),
     ConfirmClear(String),
+    ConfirmQuit,
 }
 
 pub struct App {
@@ -692,7 +693,17 @@ impl App {
             }
         }
         if close {
-            self.save();
+            if self.closing {
+                self.save();
+            } else {
+                // ask first; the dialog closes for real (see quit())
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                if minimized {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+                }
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                self.dialog = Some(Dialog::ConfirmQuit);
+            }
         }
 
         let title = match self.selected_account() {
@@ -714,6 +725,13 @@ impl App {
             .and_then(|id| self.cfg.account(id))
     }
 
+    /// Closes the app without asking (confirmed, restart or update).
+    pub(super) fn quit(&mut self, ctx: &egui::Context) {
+        self.closing = true;
+        self.save();
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
     /// Opens a new instance (it waits for this one to close) and closes.
     fn restart_now(&mut self, ctx: &egui::Context) {
         self.restart = false;
@@ -725,9 +743,7 @@ impl App {
             .arg(std::process::id().to_string())
             .spawn();
         if started.is_ok() {
-            self.closing = true;
-            self.save();
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.quit(ctx);
         }
     }
 
@@ -738,9 +754,7 @@ impl App {
             return;
         }
         if matches!(update::state(), update::State::Restarting(_)) && !self.closing {
-            self.closing = true;
-            self.save();
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.quit(ctx);
         }
     }
 }

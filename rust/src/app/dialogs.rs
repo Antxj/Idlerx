@@ -228,6 +228,25 @@ impl App {
                 }
                 Dialog::ConfirmClear(id)
             }
+            Dialog::ConfirmQuit => {
+                match confirm(
+                    ctx,
+                    tr!("Fechar o Idlerx?", "Close Idlerx?"),
+                    tr!(
+                        "Todas as contas abertas serão fechadas e os jogos param de rodar aqui até você abrir o Idlerx de novo.",
+                        "All open accounts will be closed and the games stop running here until you open Idlerx again."
+                    ),
+                    tr!("Fechar", "Close"),
+                ) {
+                    Some(true) => {
+                        self.quit(ctx);
+                        keep = false;
+                    }
+                    Some(false) => keep = false,
+                    None => {}
+                }
+                Dialog::ConfirmQuit
+            }
         };
         if keep && self.dialog.is_none() {
             self.dialog = Some(dialog);
