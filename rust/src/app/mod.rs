@@ -61,6 +61,10 @@ fn check_updates_enabled() -> bool {
 #[derive(Clone)]
 struct DragAccount(String);
 
+/// Payload of a group dragged in the list.
+#[derive(Clone)]
+struct DragGroup(String);
+
 enum Action {
     Select(String),
     Open(String),
@@ -85,6 +89,12 @@ enum Action {
     NewGroup(Option<String>),
     RenameGroup(String),
     DeleteGroup(String),
+    /// Moves the first group to the place of the second one.
+    ReorderGroup(String, String),
+    /// Moves a group one place up (-1) or down (+1).
+    MoveGroup(String, i32),
+    /// Frames per second of one account (None = automatic).
+    SetFps(String, Option<u32>),
     ToggleCollapse(String),
     OpenGroup(String),
     PauseGroup(String),
@@ -466,6 +476,20 @@ impl App {
                 self.cfg.layout = Layout::Grid;
                 self.mark_dirty();
             }
+            Action::ReorderGroup(id, target) => {
+                self.cfg.move_group_to(&id, &target);
+                self.mark_dirty();
+            }
+            Action::MoveGroup(id, delta) => {
+                self.cfg.move_group_by(&id, delta);
+                self.mark_dirty();
+            }
+            Action::SetFps(id, fps) => {
+                if let Some(a) = self.cfg.account_mut(&id) {
+                    a.fps = fps;
+                    self.mark_dirty();
+                }
+            }
             Action::Expand(id) => {
                 self.cfg.layout = Layout::Tabs;
                 self.cfg.selected = Some(id);
@@ -621,6 +645,17 @@ impl App {
         }
     }
 
+    /// Frame limit of each page: the selected account draws freely, the
+    /// others at the configured limit (or each account's own choice).
+    fn apply_fps(&self) {
+        for (id, p) in &self.panels {
+            if let Some(a) = self.cfg.account(id) {
+                let selected = self.cfg.selected.as_deref() == Some(id.as_str());
+                p.set_fps(self.cfg.fps_for(a, selected));
+            }
+        }
+    }
+
     fn show_window(&mut self, ctx: &egui::Context) {
         if self.window_shown {
             return;
@@ -717,6 +752,7 @@ impl eframe::App for App {
         self.open_next(ctx);
         self.poll(ctx);
         self.show_window(ctx);
+        self.apply_fps();
 
         // minimized: every page stops drawing and keeps less memory (the
         // games keep running); ui() places them again when restored

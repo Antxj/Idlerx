@@ -28,6 +28,9 @@ pub struct Account {
     pub open: bool,
     /// Group in the side list (None = no group).
     pub group: Option<String>,
+    /// Frames per second of this account: None = automatic (no limit while
+    /// selected, `Config::fps_limit` otherwise); Some(0) = never limited.
+    pub fps: Option<u32>,
 }
 
 impl Default for Account {
@@ -44,6 +47,7 @@ impl Default for Account {
             in_grid: true,
             open: false,
             group: None,
+            fps: None,
         }
     }
 }
@@ -124,6 +128,9 @@ pub struct Config {
     /// The browser offers to save logins and fills them in (per account,
     /// encrypted by Windows, no sync).
     pub save_passwords: bool,
+    /// Frames per second of the accounts that are not selected (0 = no
+    /// limit). Idle games do not need 60 drawings a second.
+    pub fps_limit: u32,
     pub window_size: Option<[f32; 2]>,
     pub window_maximized: bool,
     /// Profile folders still to be deleted (they were in use).
@@ -147,6 +154,7 @@ impl Default for Config {
             keep_active: true,
             economy: true,
             save_passwords: true,
+            fps_limit: 15,
             window_size: None,
             window_maximized: true,
             pending_delete: Vec::new(),
@@ -244,6 +252,40 @@ impl Config {
             .position(|a| a.id == target)
             .map_or(self.accounts.len(), |p| p + 1);
         self.accounts.insert(to, acc);
+    }
+
+    /// Frames per second an account should draw at (0 = no limit).
+    pub fn fps_for(&self, a: &Account, selected: bool) -> u32 {
+        match a.fps {
+            Some(n) => n,
+            None if selected => 0,
+            None => self.fps_limit,
+        }
+    }
+
+    /// Moves group `id` to the place of `target` (drag and drop).
+    pub fn move_group_to(&mut self, id: &str, target: &str) {
+        let Some(from) = self.groups.iter().position(|g| g.id == id) else {
+            return;
+        };
+        let Some(to) = self.groups.iter().position(|g| g.id == target) else {
+            return;
+        };
+        if from != to {
+            let g = self.groups.remove(from);
+            self.groups.insert(to, g);
+        }
+    }
+
+    /// Moves group `id` one place up (-1) or down (+1).
+    pub fn move_group_by(&mut self, id: &str, delta: i32) {
+        let Some(from) = self.groups.iter().position(|g| g.id == id) else {
+            return;
+        };
+        let to = from as i64 + delta as i64;
+        if to >= 0 && (to as usize) < self.groups.len() {
+            self.groups.swap(from, to as usize);
+        }
     }
 
     /// Removes a group; its accounts stay, without group.
@@ -616,6 +658,41 @@ mod tests {
     }
 
     #[test]
+    fn group_order() {
+        let mut c = Config::default();
+        for g in ["a", "b", "c"] {
+            group_for_test(&mut c, g);
+        }
+        let ids = |c: &Config| c.groups.iter().map(|g| g.id.clone()).collect::<Vec<_>>();
+        c.move_group_to("c", "a");
+        assert_eq!(ids(&c), ["c", "a", "b"]);
+        c.move_group_to("c", "b");
+        assert_eq!(ids(&c), ["a", "b", "c"]);
+        c.move_group_by("a", -1); // already first
+        assert_eq!(ids(&c), ["a", "b", "c"]);
+        c.move_group_by("a", 1);
+        assert_eq!(ids(&c), ["b", "a", "c"]);
+        c.move_group_by("c", 1); // already last
+        assert_eq!(ids(&c), ["b", "a", "c"]);
+    }
+
+    #[test]
+    fn fps_per_account() {
+        let mut c = Config::default();
+        account_for_test(&mut c, "a", None);
+        let a = c.accounts[0].clone();
+        assert_eq!(c.fps_for(&a, true), 0); // selected: no limit
+        assert_eq!(c.fps_for(&a, false), 15);
+        c.fps_limit = 0;
+        assert_eq!(c.fps_for(&a, false), 0);
+        let mut b = a.clone();
+        b.fps = Some(5);
+        assert_eq!(c.fps_for(&b, true), 5); // fixed, even selected
+        b.fps = Some(0);
+        assert_eq!(c.fps_for(&b, false), 0);
+    }
+
+    #[test]
     fn grid_shape_sizes() {
         let auto = |n: usize| if n <= 2 { n } else { 2 };
         assert_eq!(grid_shape(0, 0, 4, auto), (2, 2));
@@ -638,6 +715,8 @@ mod tests {
         assert!(c.accounts[0].in_grid);
         assert!(c.check_updates && c.restore_open && c.keep_active && c.economy);
         assert!(c.save_passwords);
+        assert_eq!(c.fps_limit, 15);
+        assert_eq!(c.accounts[0].fps, None);
         let a = &c.accounts[0];
         assert_eq!(a.start_url(), "https://a.com");
     }

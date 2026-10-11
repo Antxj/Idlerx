@@ -444,6 +444,40 @@ impl App {
                 }
             },
         );
+        ui.menu_button(
+            tr!(
+                "      Quadros por segundo (FPS)",
+                "      Frames per second (FPS)"
+            ),
+            |ui| {
+                let auto = trf!(
+                    "Automático (sem limite selecionada, {} nas outras)",
+                    "Automatic (no limit when selected, {} otherwise)",
+                    if self.cfg.fps_limit == 0 {
+                        tr!("sem limite", "no limit").to_string()
+                    } else {
+                        self.cfg.fps_limit.to_string()
+                    }
+                );
+                if ui.selectable_label(a.fps.is_none(), auto).clicked() {
+                    actions.push(Action::SetFps(id(), None));
+                }
+                if ui
+                    .selectable_label(a.fps == Some(0), tr!("Sempre sem limite", "Never limited"))
+                    .clicked()
+                {
+                    actions.push(Action::SetFps(id(), Some(0)));
+                }
+                for n in [60u32, 30, 15, 10, 5] {
+                    if ui
+                        .selectable_label(a.fps == Some(n), trf!("Sempre {n}", "Always {n}"))
+                        .clicked()
+                    {
+                        actions.push(Action::SetFps(id(), Some(n)));
+                    }
+                }
+            },
+        );
         let grid = if a.in_grid {
             tr!("☐  Tirar da grade", "☐  Hide from grid")
         } else {
@@ -474,18 +508,54 @@ impl App {
         let dark = ui.visuals().dark_mode;
         let (rect, resp) = ui.allocate_exact_size(
             Vec2::new(ui.available_width(), GROUP_HEIGHT),
-            Sense::click(),
+            Sense::click_and_drag(),
         );
         let ids = self.cfg.accounts_in(Some(&g.id));
         let open = ids.iter().filter(|id| self.is_open_or_opening(id)).count();
+        // the grid is showing only this group
+        let showing = self.cfg.layout == Layout::Grid
+            && self.cfg.grid_group.as_deref() == Some(g.id.as_str());
 
         // an account dropped here joins the group
         let drop_here = resp.dnd_hover_payload::<DragAccount>().is_some();
         if let Some(p) = resp.dnd_release_payload::<DragAccount>() {
             actions.push(Action::MoveToGroup(p.0.clone(), Some(g.id.clone())));
         }
+        // another group dropped here takes this place
+        resp.dnd_set_drag_payload(DragGroup(g.id.clone()));
+        let group_over = resp
+            .dnd_hover_payload::<DragGroup>()
+            .filter(|p| p.0 != g.id)
+            .map(|p| {
+                let pos = |id: &str| self.cfg.groups.iter().position(|x| x.id == id);
+                pos(&p.0) < pos(&g.id)
+            });
+        if let Some(p) = resp.dnd_release_payload::<DragGroup>() {
+            actions.push(Action::ReorderGroup(p.0.clone(), g.id.clone()));
+        }
 
         let painter = ui.painter_at(rect);
+        if let Some(from_above) = group_over {
+            let y = if from_above {
+                rect.bottom() - 1.0
+            } else {
+                rect.top() + 1.0
+            };
+            painter.line_segment(
+                [
+                    Pos2::new(rect.left() + 4.0, y),
+                    Pos2::new(rect.right() - 4.0, y),
+                ],
+                Stroke::new(2.5, ACCENT),
+            );
+        }
+        if showing {
+            painter.rect_filled(
+                rect,
+                CornerRadius::same(6),
+                ACCENT.gamma_multiply(if dark { 0.22 } else { 0.16 }),
+            );
+        }
         if drop_here {
             painter.rect_filled(rect, CornerRadius::same(6), ACCENT.gamma_multiply(0.25));
             painter.rect_stroke(
@@ -560,8 +630,21 @@ impl App {
                 actions.push(Action::OpenGroup(g.id.clone()));
             }
         }
+        // the arrow collapses/expands; the rest shows the group in the grid
+        // (a second click shows every account again)
+        let on_arrow = resp
+            .interact_pointer_pos()
+            .is_some_and(|p| p.x < rect.left() + 24.0);
         if resp.clicked() && !button_clicked {
-            actions.push(Action::ToggleCollapse(g.id.clone()));
+            if on_arrow {
+                actions.push(Action::ToggleCollapse(g.id.clone()));
+            } else {
+                actions.push(Action::GridGroup(if showing {
+                    None
+                } else {
+                    Some(g.id.clone())
+                }));
+            }
         }
 
         let (mut cpu, mut mem) = (0.0f32, 0u64);
@@ -572,8 +655,12 @@ impl App {
             }
         }
         let tip = trf!(
-            "{} conta(s) · {open} aberta(s)\nCPU {cpu:.0}% · RAM {}\n\nClique para recolher/expandir. Arraste contas para cá.",
-            "{} account(s) · {open} open\nCPU {cpu:.0}% · RAM {}\n\nClick to collapse/expand. Drag accounts here.",
+            "{} conta(s) · {open} aberta(s)\nCPU {cpu:.0}% · RAM {}\n\nClique para mostrar só este grupo na grade \
+             (de novo: todas). A seta recolhe/expande. Arraste para mudar a ordem; \
+             solte contas aqui para colocá-las no grupo.",
+            "{} account(s) · {open} open\nCPU {cpu:.0}% · RAM {}\n\nClick to show only this group in the grid \
+             (again: all). The arrow collapses/expands. Drag to reorder; drop \
+             accounts here to put them in the group.",
             ids.len(),
             metrics::fmt_memory(mem)
         );
@@ -593,6 +680,31 @@ impl App {
                 .clicked()
             {
                 actions.push(Action::GridGroup(Some(g.id.clone())));
+            }
+            ui.separator();
+            let pos = self
+                .cfg
+                .groups
+                .iter()
+                .position(|x| x.id == g.id)
+                .unwrap_or(0);
+            if ui
+                .add_enabled(
+                    pos > 0,
+                    egui::Button::new(tr!("      Mover para cima", "      Move up")),
+                )
+                .clicked()
+            {
+                actions.push(Action::MoveGroup(g.id.clone(), -1));
+            }
+            if ui
+                .add_enabled(
+                    pos + 1 < self.cfg.groups.len(),
+                    egui::Button::new(tr!("      Mover para baixo", "      Move down")),
+                )
+                .clicked()
+            {
+                actions.push(Action::MoveGroup(g.id.clone(), 1));
             }
             ui.separator();
             if ui.button(tr!("✏  Renomear…", "✏  Rename…")).clicked() {
@@ -615,6 +727,29 @@ impl App {
 
     /// The account being dragged follows the pointer.
     pub(super) fn drag_ghost(&self, ctx: &egui::Context) {
+        if let (Some(p), Some(pos)) = (
+            egui::DragAndDrop::payload::<DragGroup>(ctx),
+            ctx.pointer_latest_pos(),
+        ) {
+            if let Some(g) = self.cfg.group(&p.0) {
+                let dark = Self::dark(ctx);
+                egui::Area::new(egui::Id::new("drag_ghost"))
+                    .order(egui::Order::Tooltip)
+                    .fixed_pos(pos + Vec2::new(14.0, 10.0))
+                    .interactable(false)
+                    .show(ctx, |ui| {
+                        egui::Frame::new()
+                            .fill(panel_bg(dark))
+                            .stroke(Stroke::new(1.0, ACCENT))
+                            .corner_radius(CornerRadius::same(8))
+                            .inner_margin(Margin::symmetric(8, 5))
+                            .show(ui, |ui| {
+                                ui.label(RichText::new(&g.name).strong());
+                            });
+                    });
+            }
+            return;
+        }
         let Some(p) = egui::DragAndDrop::payload::<DragAccount>(ctx) else {
             return;
         };

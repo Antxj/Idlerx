@@ -49,8 +49,10 @@ próprio progresso.</sub>
   um formato fixo (lado a lado, empilhado, 2×2, 3×2, 3×3… ou quaisquer
   colunas × linhas). **Arraste uma conta da lista até um quadro** da grade
   para colocá-la ali; a grade também pode mostrar só um grupo
-- **Grupos** na lista: recolher/expandir, arrastar contas para dentro,
-  abrir ou pausar o grupo inteiro de uma vez
+- **Grupos** na lista: **clique num grupo para mostrar só as contas dele na
+  grade** (de novo: todas), a seta recolhe/expande, arraste grupos para
+  mudar a ordem, arraste contas para dentro, abra ou pause o grupo inteiro
+  de uma vez
 - **Modo foco** (F11): some com a lista e a barra, fica só o jogo. F11 ou Esc
   traz tudo de volta
 - **CPU e RAM** de cada conta (na lista e no quadro da grade), de cada
@@ -74,6 +76,12 @@ próprio progresso.</sub>
 - **Instância única**: abrir o executável de novo só traz a janela para a frente
 
 ### Economia de recursos
+
+- **Limite de quadros por segundo** (15 FPS por padrão): jogos idle não
+  precisam desenhar 60 (ou 144, 180…) vezes por segundo. A conta
+  selecionada desenha sem limite e as outras no limite; cada conta pode ter
+  o seu (botão direito › Quadros por segundo). Com quatro jogos animados na
+  grade, o uso de CPU caiu pela metade
 
 - O **modo econômico** compartilha os processos de navegador, GPU e rede
   entre as contas: com 5 contas, 21 processos e ~1,5 GB em vez de 41 e

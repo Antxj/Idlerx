@@ -48,8 +48,10 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
   or a fixed shape (side by side, stacked, 2×2, 3×2, 3×3… or any columns ×
   rows). **Drag an account from the list onto a grid cell** to put it there;
   the grid can also show a single group
-- **Groups** in the side list: collapse/expand, drag accounts into them,
-  open or pause a whole group at once
+- **Groups** in the side list: **click a group to show only its accounts
+  in the grid** (click again for all of them), the arrow collapses/expands,
+  drag groups to reorder them, drag accounts into them, open or pause a
+  whole group at once
 - **Focus mode** (F11): hides the list and the bar, only the game remains.
   F11 or Esc brings everything back
 - **CPU and RAM** of each account (in the list and on the grid cell), of
@@ -73,6 +75,11 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
   to the front
 
 ### Saving resources
+
+- **Frame limit** (15 FPS by default): idle games do not need to draw 60
+  (or 144, 180…) times a second. The selected account draws freely and the
+  others at the limit; each account can have its own (right click › Frames
+  per second). With four busy games in the grid, CPU use dropped by half
 
 - **Economy mode** shares the browser, GPU and network processes among the
   accounts: with 5 accounts, 21 processes and ~1.5 GB instead of 41 and

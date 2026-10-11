@@ -305,6 +305,11 @@ impl App {
                 metrics::fmt_duration(p.started.elapsed()),
                 usage_text(u)
             );
+            let selected = self.cfg.selected.as_deref() == Some(a.id.as_str());
+            let fps = self.cfg.fps_for(a, selected);
+            if fps > 0 {
+                usage.push_str(&format!(" · {fps} FPS"));
+            }
         }
 
         // buttons from the right
@@ -338,10 +343,10 @@ impl App {
             actions.push(Action::ToggleMute(a.id.clone()));
         }
 
-        let usage_w = if usage.is_empty() || rect.width() < 400.0 {
+        let usage_w = if usage.is_empty() || rect.width() < 420.0 {
             0.0
         } else {
-            190.0
+            230.0
         };
         if usage_w > 0.0 {
             painter.text(

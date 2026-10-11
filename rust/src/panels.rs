@@ -22,8 +22,10 @@ use std::rc::Rc;
 use std::time::Instant;
 use webview2_com::Microsoft::Web::WebView2::Win32::*;
 use webview2_com::{
-    take_pwstr, AcceleratorKeyPressedEventHandler, CoreWebView2EnvironmentOptions,
-    CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
+    take_pwstr, AcceleratorKeyPressedEventHandler,
+    AddScriptToExecuteOnDocumentCreatedCompletedHandler, ContentLoadingEventHandler,
+    CoreWebView2EnvironmentOptions, CreateCoreWebView2ControllerCompletedHandler,
+    CreateCoreWebView2EnvironmentCompletedHandler, ExecuteScriptCompletedHandler,
     FocusChangedEventHandler, GetProcessExtendedInfosCompletedHandler,
 };
 use windows::Win32::Foundation::{HWND, RECT};
@@ -47,6 +49,9 @@ fn browser_args(keep_active: bool) -> String {
     s.push_str(" --autoplay-policy=no-user-gesture-required");
     s
 }
+
+/// Limits how often the pages draw (see the file).
+const FPS_SCRIPT: &str = include_str!("fps.js");
 
 /// Keys pressed inside a page that belong to the app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -174,6 +179,9 @@ pub struct Panel {
     hotkey: Rc<Cell<Option<Hotkey>>>,
     bounds: Option<(i32, i32, i32, i32)>,
     visible: bool,
+    /// Frame limit last sent to the page, and "send again" (new document).
+    fps_sent: Cell<Option<u32>>,
+    fps_resend: Rc<Cell<bool>>,
 }
 
 impl Drop for Panel {
@@ -220,6 +228,7 @@ impl Panel {
                 Ok(())
             }));
             let k = hotkey.clone();
+            let wake_keys = wake.clone();
             let key_handler =
                 AcceleratorKeyPressedEventHandler::create(Box::new(move |_, args| {
                     let Some(args) = args else { return Ok(()) };
@@ -234,13 +243,29 @@ impl Panel {
                     if down && vk == VK_F11 {
                         k.set(Some(Hotkey::Focus));
                         args.SetHandled(true)?;
-                        wake();
+                        wake_keys();
                     } else if down && vk == VK_ESCAPE {
                         k.set(Some(Hotkey::Escape));
-                        wake();
+                        wake_keys();
                     }
                     Ok(())
                 }));
+            // frame limiter: in every document, before the page's scripts
+            let _ = webview.AddScriptToExecuteOnDocumentCreated(
+                &HSTRING::from(FPS_SCRIPT),
+                &AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(|_, _| {
+                    Ok(())
+                })),
+            );
+            let fps_resend = Rc::new(Cell::new(true));
+            let r = fps_resend.clone();
+            let w = wake.clone();
+            let loading = ContentLoadingEventHandler::create(Box::new(move |_, _| {
+                r.set(true);
+                w();
+                Ok(())
+            }));
+            let _ = webview.add_ContentLoading(&loading, &mut token);
             let _ = controller.add_GotFocus(&focus_handler, &mut token);
             let _ = controller.add_AcceleratorKeyPressed(&key_handler, &mut token);
 
@@ -255,6 +280,8 @@ impl Panel {
                 hotkey,
                 bounds: None,
                 visible: false,
+                fps_sent: Cell::new(None),
+                fps_resend,
             };
             p.set_save_passwords(save_passwords);
             p.set_muted(account.muted);
@@ -309,6 +336,22 @@ impl Panel {
         if let Ok(w) = self.webview.cast::<ICoreWebView2_19>() {
             let _ = unsafe { w.SetMemoryUsageTargetLevel(level) };
         }
+    }
+
+    /// Frames per second the page may draw (0 = no limit). Only talks to
+    /// the page when the value changes or a new document loaded.
+    pub fn set_fps(&self, fps: u32) {
+        if !self.fps_resend.replace(false) && self.fps_sent.get() == Some(fps) {
+            return;
+        }
+        self.fps_sent.set(Some(fps));
+        let js = format!("window.__idlerxFps && window.__idlerxFps.set({fps})");
+        let _ = unsafe {
+            self.webview.ExecuteScript(
+                &HSTRING::from(js),
+                &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
+            )
+        };
     }
 
     /// Edge's password manager: offers to save the login and fills it in
