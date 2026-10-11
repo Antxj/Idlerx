@@ -60,6 +60,9 @@ pub enum Hotkey {
 /// Result of [`open`], filled in when the page exists (or failed).
 pub type PanelSlot = Rc<RefCell<Option<Result<Panel, String>>>>;
 
+/// Wakes the interface up (a repaint) from a WebView2 callback.
+pub type Wake = Rc<dyn Fn()>;
+
 /// Starts opening an account inside `parent` (the main window). `ready` is
 /// called on the UI thread when the slot is filled.
 pub fn open(
@@ -69,7 +72,7 @@ pub fn open(
     economy: bool,
     save_passwords: bool,
     dark: bool,
-    ready: impl Fn() + 'static,
+    wake: Wake,
 ) -> PanelSlot {
     let slot: PanelSlot = Rc::new(RefCell::new(None));
     let dir = if economy {
@@ -92,7 +95,7 @@ pub fn open(
                 Ok(env) => env,
                 Err(e) => {
                     *s.borrow_mut() = Some(Err(e));
-                    ready();
+                    wake();
                     return Ok(());
                 }
             };
@@ -107,11 +110,19 @@ pub fn open(
                             controller.ok_or_else(|| "WebView2 returned no page".to_string())
                         })
                         .and_then(|c| {
-                            Panel::setup(c, &env2, parent, &account, save_passwords, dark)
-                                .map_err(|e| e.to_string())
+                            Panel::setup(
+                                c,
+                                &env2,
+                                parent,
+                                &account,
+                                save_passwords,
+                                dark,
+                                wake.clone(),
+                            )
+                            .map_err(|e| e.to_string())
                         });
                     *s2.borrow_mut() = Some(r);
-                    ready();
+                    wake();
                     Ok(())
                 },
             ));
@@ -182,6 +193,7 @@ impl Panel {
         account: &Account,
         save_passwords: bool,
         dark: bool,
+        wake: Wake,
     ) -> windows_core::Result<Panel> {
         unsafe {
             controller.SetIsVisible(false)?;
@@ -201,8 +213,10 @@ impl Panel {
             let hotkey = Rc::new(Cell::new(None));
             let mut token = Default::default();
             let f = got_focus.clone();
+            let w = wake.clone();
             let focus_handler = FocusChangedEventHandler::create(Box::new(move |_, _| {
                 f.set(true);
+                w();
                 Ok(())
             }));
             let k = hotkey.clone();
@@ -220,8 +234,10 @@ impl Panel {
                     if down && vk == VK_F11 {
                         k.set(Some(Hotkey::Focus));
                         args.SetHandled(true)?;
+                        wake();
                     } else if down && vk == VK_ESCAPE {
                         k.set(Some(Hotkey::Escape));
+                        wake();
                     }
                     Ok(())
                 }));

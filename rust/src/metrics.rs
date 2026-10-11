@@ -3,14 +3,17 @@
 //! Every account has its own browser process (its own profile folder), so
 //! the usage of an account is the sum of that process and all its
 //! descendants (renderers, GPU, utilities). Measured in a background thread
-//! every 2 seconds.
+//! every 2 seconds, reading only CPU and memory of the app's own processes;
+//! the whole process list (to find new ones) is read every 10 seconds.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
 
 const INTERVAL: Duration = Duration::from_secs(2);
+/// Every how many rounds the whole process list is read again.
+const FULL_SCAN_EVERY: u32 = 5;
 
 /// Key of the app itself: its process tree contains every account, so it
 /// is the grand total.
@@ -42,11 +45,23 @@ impl Metrics {
             let cpus = std::thread::available_parallelism()
                 .map(|n| n.get())
                 .unwrap_or(1) as f32;
+            let kind = ProcessRefreshKind::nothing().with_cpu().with_memory();
+            let me = Pid::from_u32(std::process::id());
+            let mut tree = HashMap::new();
+            let mut ours: Vec<Pid> = Vec::new();
+            let mut round = 0u32;
             loop {
                 let pids = watch.lock().unwrap().clone();
                 if !pids.is_empty() {
-                    sys.refresh_processes(ProcessesToUpdate::All, true);
-                    let tree = children(&sys);
+                    if round.is_multiple_of(FULL_SCAN_EVERY) || ours.is_empty() {
+                        // whole list: finds the app's new processes
+                        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, kind);
+                        tree = children(&sys);
+                        ours = descendants(&tree, me);
+                    } else {
+                        sys.refresh_processes_specifics(ProcessesToUpdate::Some(&ours), true, kind);
+                    }
+                    round = round.wrapping_add(1);
                     let mut out = HashMap::new();
                     for (id, roots) in pids {
                         let mut u = Usage::default();
@@ -74,6 +89,22 @@ impl Metrics {
     pub fn get(&self, id: &str) -> Option<Usage> {
         self.results.lock().unwrap().get(id).copied()
     }
+}
+
+/// A process and all its descendants.
+fn descendants(tree: &HashMap<Pid, Vec<Pid>>, root: Pid) -> Vec<Pid> {
+    let mut out = Vec::new();
+    let mut stack = vec![root];
+    while let Some(pid) = stack.pop() {
+        if out.contains(&pid) {
+            continue;
+        }
+        out.push(pid);
+        if let Some(kids) = tree.get(&pid) {
+            stack.extend(kids.iter().copied());
+        }
+    }
+    out
 }
 
 fn children(sys: &System) -> HashMap<Pid, Vec<Pid>> {
@@ -136,7 +167,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formatos() {
+    fn formats() {
         assert_eq!(fmt_duration(Duration::from_secs(30)), "<1min");
         assert_eq!(fmt_duration(Duration::from_secs(48 * 60 + 5)), "48min");
         assert_eq!(
@@ -148,7 +179,7 @@ mod tests {
     }
 
     #[test]
-    fn mede_o_proprio_processo() {
+    fn measures_its_own_process() {
         let mut sys = System::new();
         sys.refresh_processes(ProcessesToUpdate::All, true);
         let tree = children(&sys);

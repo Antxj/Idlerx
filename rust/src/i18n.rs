@@ -32,64 +32,64 @@ macro_rules! trf {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Idioma {
-    Portugues,
-    Ingles,
+pub enum Language {
+    Portuguese,
+    English,
 }
 
-impl Idioma {
+impl Language {
     /// Code stored in the settings.
     #[cfg(test)]
-    pub fn codigo(self) -> &'static str {
+    pub fn code(self) -> &'static str {
         match self {
-            Idioma::Portugues => "pt",
-            Idioma::Ingles => "en",
+            Language::Portuguese => "pt",
+            Language::English => "en",
         }
     }
 
-    pub fn do_codigo(c: &str) -> Option<Idioma> {
+    pub fn from_code(c: &str) -> Option<Language> {
         match c {
-            "pt" => Some(Idioma::Portugues),
-            "en" => Some(Idioma::Ingles),
+            "pt" => Some(Language::Portuguese),
+            "en" => Some(Language::English),
             _ => None,
         }
     }
 }
 
 // When not initialized (tests), it stays in Portuguese.
-static PORTUGUES: AtomicBool = AtomicBool::new(true);
+static PORTUGUESE: AtomicBool = AtomicBool::new(true);
 
 pub fn pt() -> bool {
-    PORTUGUES.load(Ordering::Relaxed)
+    PORTUGUESE.load(Ordering::Relaxed)
 }
 
 /// Applies the user's choice (None = automatic from Windows).
 /// IDLERX_LANGUAGE=pt|en forces a language (documentation screenshots).
-pub fn aplicar(escolha: Option<Idioma>) {
-    let forcado = std::env::var("IDLERX_LANGUAGE")
+pub fn apply(choice: Option<Language>) {
+    let forced = std::env::var("IDLERX_LANGUAGE")
         .ok()
-        .and_then(|c| Idioma::do_codigo(&c));
-    let idioma = forcado.or(escolha).unwrap_or_else(do_windows);
-    PORTUGUES.store(idioma == Idioma::Portugues, Ordering::Relaxed);
+        .and_then(|c| Language::from_code(&c));
+    let language = forced.or(choice).unwrap_or_else(from_windows);
+    PORTUGUESE.store(language == Language::Portuguese, Ordering::Relaxed);
 }
 
 /// Windows interface language.
-pub fn do_windows() -> Idioma {
+pub fn from_windows() -> Language {
     #[link(name = "kernel32")]
     extern "system" {
         fn GetUserDefaultUILanguage() -> u16;
     }
-    pelo_langid(unsafe { GetUserDefaultUILanguage() })
+    from_langid(unsafe { GetUserDefaultUILanguage() })
 }
 
 /// Windows LANGID -> app language: Portuguese (Brazil or Portugal)
 /// uses pt-BR; all others, English.
-fn pelo_langid(langid: u16) -> Idioma {
+fn from_langid(langid: u16) -> Language {
     const LANG_PORTUGUESE: u16 = 0x16;
     if langid & 0x3FF == LANG_PORTUGUESE {
-        Idioma::Portugues
+        Language::Portuguese
     } else {
-        Idioma::Ingles
+        Language::English
     }
 }
 
@@ -98,24 +98,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn idioma_pelo_windows() {
-        assert_eq!(pelo_langid(0x0416), Idioma::Portugues); // pt-BR
-        assert_eq!(pelo_langid(0x0816), Idioma::Portugues); // pt-PT
-        assert_eq!(pelo_langid(0x0409), Idioma::Ingles); // en-US
-        assert_eq!(pelo_langid(0x0C0A), Idioma::Ingles); // es-ES
-        assert_eq!(pelo_langid(0x0407), Idioma::Ingles); // de-DE
+    fn language_from_windows() {
+        assert_eq!(from_langid(0x0416), Language::Portuguese); // pt-BR
+        assert_eq!(from_langid(0x0816), Language::Portuguese); // pt-PT
+        assert_eq!(from_langid(0x0409), Language::English); // en-US
+        assert_eq!(from_langid(0x0C0A), Language::English); // es-ES
+        assert_eq!(from_langid(0x0407), Language::English); // de-DE
     }
 
     #[test]
-    fn codigos() {
-        for i in [Idioma::Portugues, Idioma::Ingles] {
-            assert_eq!(Idioma::do_codigo(i.codigo()), Some(i));
+    fn codes() {
+        for i in [Language::Portuguese, Language::English] {
+            assert_eq!(Language::from_code(i.code()), Some(i));
         }
-        assert_eq!(Idioma::do_codigo("xx"), None);
+        assert_eq!(Language::from_code("xx"), None);
     }
 
     #[test]
-    fn macros_sem_inicializar_ficam_em_portugues() {
+    fn macros_default_to_portuguese() {
         let n = 2;
         assert_eq!(tr!("Conectar", "Connect"), "Conectar");
         assert_eq!(trf!("{n} contas", "{n} accounts"), "2 contas");

@@ -510,7 +510,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn enderecos() {
+    fn addresses() {
         assert_eq!(
             normalize_url("tibia.com").as_deref(),
             Some("https://tibia.com")
@@ -535,7 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn dominios_e_nomes() {
+    fn domains_and_names() {
         assert_eq!(host_of("https://user:pw@www.a.com:81/x"), "www.a.com:81");
         assert_eq!(
             domain("https://www.grinderscape.org/game"),
@@ -552,14 +552,14 @@ mod tests {
         assert_eq!(initials("  "), "?");
     }
 
-    fn conta(c: &mut Config, id: &str, group: Option<&str>) {
+    fn account_for_test(c: &mut Config, id: &str, group: Option<&str>) {
         let mut a = Account::new(id.into(), "https://x.com".into());
         a.id = id.into();
         a.group = group.map(String::from);
         c.accounts.push(a);
     }
 
-    fn grupo(c: &mut Config, id: &str) {
+    fn group_for_test(c: &mut Config, id: &str) {
         c.groups.push(Group {
             id: id.into(),
             name: id.into(),
@@ -568,10 +568,10 @@ mod tests {
     }
 
     #[test]
-    fn ordem_e_arrastar() {
+    fn order_and_dragging() {
         let mut c = Config::default();
         for n in ["a", "b", "c", "d"] {
-            conta(&mut c, n, None);
+            account_for_test(&mut c, n, None);
         }
         // favorites no longer jump to the top: the order is the user's
         c.accounts[2].favorite = true;
@@ -586,14 +586,14 @@ mod tests {
     }
 
     #[test]
-    fn grupos() {
+    fn groups() {
         let mut c = Config::default();
-        grupo(&mut c, "g1");
-        grupo(&mut c, "g2");
-        conta(&mut c, "a", Some("g2"));
-        conta(&mut c, "b", None);
-        conta(&mut c, "c", Some("g1"));
-        conta(&mut c, "d", Some("sumiu")); // group that does not exist
+        group_for_test(&mut c, "g1");
+        group_for_test(&mut c, "g2");
+        account_for_test(&mut c, "a", Some("g2"));
+        account_for_test(&mut c, "b", None);
+        account_for_test(&mut c, "c", Some("g1"));
+        account_for_test(&mut c, "d", Some("sumiu")); // group that does not exist
         assert_eq!(c.display_order(), ["b", "d", "c", "a"]);
         assert_eq!(c.accounts_in(Some("g1")), ["c"]);
 
@@ -616,7 +616,7 @@ mod tests {
     }
 
     #[test]
-    fn formato_da_grade() {
+    fn grid_shape_sizes() {
         let auto = |n: usize| if n <= 2 { n } else { 2 };
         assert_eq!(grid_shape(0, 0, 4, auto), (2, 2));
         assert_eq!(grid_shape(0, 0, 1, auto), (1, 1));
@@ -630,7 +630,7 @@ mod tests {
     }
 
     #[test]
-    fn json_antigo_ou_parcial() {
+    fn old_or_partial_json() {
         let c: Config =
             serde_json::from_str(r#"{"accounts":[{"id":"x","name":"N","url":"https://a.com"}]}"#)
                 .unwrap();
@@ -643,7 +643,7 @@ mod tests {
     }
 
     #[test]
-    fn ids_unicos() {
+    fn unique_ids() {
         let a = new_id();
         assert_eq!(a.len(), 16);
         assert_ne!(a, new_id());

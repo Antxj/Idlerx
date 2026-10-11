@@ -14,6 +14,13 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # windows and windows-core must stay on the version webview2-com uses
+      # (they are updated by hand together with it)
+      - dependency-name: "windows"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "windows-core"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       # minor and patch updates together in one pull request
       rust:

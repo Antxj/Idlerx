@@ -23,21 +23,21 @@ fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if let Some(pid) = args
         .iter()
-        .position(|a| a == update::ARG_APOS_ATUALIZAR)
+        .position(|a| a == update::ARG_AFTER_UPDATE)
         .and_then(|i| args.get(i + 1))
         .and_then(|p| p.parse().ok())
     {
-        update::aguardar_processo(pid, Duration::from_secs(30));
+        update::wait_for_process(pid, Duration::from_secs(30));
     }
 
     if !single::acquire_or_signal() {
         return Ok(()); // already running: the other instance shows itself
     }
     single::spawn_show_listener();
-    update::limpar_restos();
+    update::clean_leftovers();
 
     let cfg = config::load();
-    i18n::aplicar(cfg.language.as_deref().and_then(i18n::Idioma::do_codigo));
+    i18n::apply(cfg.language.as_deref().and_then(i18n::Language::from_code));
 
     let size = cfg.window_size.unwrap_or([1280.0, 800.0]);
     let viewport = egui::ViewportBuilder::default()

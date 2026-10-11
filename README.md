@@ -22,6 +22,19 @@ no installer.
 The interface is available in English and Brazilian Portuguese, following
 the Windows language (it can be set under **Settings** ⚙ › Language).
 
+| Dark theme | Light theme |
+|---|---|
+| ![Four accounts in a 2×2 grid, dark theme](docs/en/home_dark.png) | ![The same grid, light theme](docs/en/home_light.png) |
+
+| Grid shape | Settings |
+|---|---|
+| ![Grid shape picker](docs/en/grid_menu.png) | ![Settings](docs/en/settings.png) |
+
+<sub>Games in the pictures: [A Dark Room](https://github.com/doublespeakgames/adarkroom),
+[Trimps](https://github.com/Trimps/Trimps.github.io) and
+[Candy Box 2](https://github.com/candybox2/candybox2.github.io), all open
+source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
+
 ## Features
 
 - **Real isolation**: each account has its own browser profile folder. Log
@@ -65,9 +78,10 @@ the Windows language (it can be set under **Settings** ⚙ › Language).
   accounts: with 5 accounts, 21 processes and ~1.5 GB instead of 41 and
   ~2.7 GB. Each mode keeps its own logins, so after switching modes log in
   to the games once again
-- Pages that are off screen (another account selected, a menu on top)
-  **stop drawing** and WebView2 is told to **use less memory**, while the
-  game keeps running
+- Pages that are off screen (another account selected, a menu on top,
+  **the window minimized**) **stop drawing** and WebView2 is told to **use
+  less memory**, while the game keeps running. Minimized, Idlerx uses about
+  ten times less CPU
 - "Keep games running in the background" (on by default) stops the browser
   from slowing down the timers of hidden pages, so idle games keep
   progressing. Turn it off to save even more CPU
@@ -116,7 +130,8 @@ cargo run
 Structure:
 
 - [`main.rs`](rust/src/main.rs): startup and window
-- [`app.rs`](rust/src/app.rs): user interface (egui): list, bar, grid, dialogs
+- [`app/`](rust/src/app/mod.rs): user interface (egui), split into the
+  side list, top bar, grid, dialogs and shared widgets
 - [`panels.rs`](rust/src/panels.rs): one open account (WebView2 through
   [webview2-com](https://github.com/wravery/webview2-rs), created
   asynchronously): position, mute, zoom, navigation
@@ -134,6 +149,7 @@ Useful variables for testing:
 | `IDLERX_INSTANCE` | separates a test instance from the everyday app |
 | `IDLERX_LANGUAGE` | forces `pt` or `en` |
 | `IDLERX_UPDATE_URL` | queries another address instead of the GitHub API |
+| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings` or `grid-menu` |
 
 ## Where the data lives
 
@@ -147,7 +163,7 @@ Account data **never leaves the computer**.
 
 There is no dedicated server: the app queries
 `api.github.com/repos/Antxj/Idlerx/releases/latest` 30 seconds after opening
-and then once a day (it can be turned off under **Settings**). The request
+and then every hour (it can be turned off under **Settings**). The request
 sends no user data.
 
 When there is a new version, a discreet link appears on the top bar. With
