@@ -11,7 +11,7 @@ eframe = { version = "0.36", default-features = false, features = ["wgpu_no_defa
 # only the DirectX 12 backend: no Vulkan/OpenGL code in the executable
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "dx12"] }
 webview2-com = "0.39"
-windows = { version = "0.62", features = ["Win32_Foundation"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_System_Com"] }
 windows-core = "0.62"
 raw-window-handle = "0.6"
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
@@ -26,6 +26,7 @@ sha1 = "0.11"
 base32 = "0.5"
 rfd = "0.17"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust", "Win32_System_Threading", "Win32_Globalization", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Networking_WinSock", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_NetworkManagement_NetManagement"] }
+tray-icon = "0.26"
 
 [build-dependencies]
 embed-resource = "3"

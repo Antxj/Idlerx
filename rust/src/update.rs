@@ -28,7 +28,8 @@ pub const REPOSITORY: &str = "Antxj/Idlerx";
 pub const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Name of the release asset that contains the app.
 const ASSET: &str = "Idlerx.exe";
-const FIRST_CHECK: Duration = Duration::from_secs(30);
+/// Right after the app opens (a moment for the window to show up).
+const FIRST_CHECK: Duration = Duration::from_secs(3);
 const INTERVAL: Duration = Duration::from_secs(60 * 60);
 /// How often the clock is looked at (the wait follows the real clock, so a
 /// computer that slept does not delay the next check).

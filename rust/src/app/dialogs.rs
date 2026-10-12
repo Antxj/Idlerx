@@ -360,6 +360,7 @@ impl App {
     /// Returns true when it should close.
     pub(super) fn settings_dialog(&mut self, ctx: &egui::Context) -> bool {
         let before = self.cfg.clone();
+        let mut quit = false;
         let modal = egui::Modal::new(egui::Id::new("settings")).show(ctx, |ui| {
             ui.set_width(460.0);
             ui.heading(tr!("Configurações", "Settings"));
@@ -573,6 +574,14 @@ impl App {
             }
             ui.add_space(6.0);
             ui.checkbox(
+                &mut self.cfg.close_to_tray,
+                tr!(
+                    "O X manda o Idlerx para a bandeja (os jogos continuam rodando)",
+                    "The X sends Idlerx to the tray (the games keep running)"
+                ),
+            );
+            ui.add_space(6.0);
+            ui.checkbox(
                 &mut self.cfg.check_updates,
                 tr!(
                     "Verificar novas versões automaticamente",
@@ -653,6 +662,9 @@ impl App {
                     if ui.button(tr!("Fechar", "Close")).clicked() {
                         close = true;
                     }
+                    if ui.button(tr!("Sair do Idlerx", "Quit Idlerx")).clicked() {
+                        quit = true;
+                    }
                 });
             });
             close
@@ -672,6 +684,10 @@ impl App {
         CHECK_UPDATES.store(self.cfg.check_updates, Ordering::Relaxed);
         if self.cfg != before {
             self.mark_dirty();
+        }
+        if quit {
+            self.dialog = Some(Dialog::ConfirmQuit);
+            return true;
         }
         modal.inner || modal.should_close()
     }

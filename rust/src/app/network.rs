@@ -319,6 +319,74 @@ impl App {
         Some((color, tip))
     }
 
+    /// For the tray: one menu line per group with a VPN, whether one is
+    /// down (red dot), and a tooltip line naming the groups that are down.
+    /// Also notifies a drop that lasts (15 s) and the VPN coming back.
+    pub(super) fn vpn_tray_status(&mut self) -> (Vec<String>, bool, Option<String>) {
+        const NOTIFY_AFTER: Duration = Duration::from_secs(15);
+        let mut lines = Vec::new();
+        let mut down_names = Vec::new();
+        let groups: Vec<(String, String)> = self
+            .cfg
+            .groups
+            .iter()
+            .filter(|g| g.active_vpn().is_some())
+            .map(|g| (g.id.clone(), g.name.clone()))
+            .collect();
+        for (gid, name) in &groups {
+            let s = self.tunnels.status(gid);
+            let state = match &s.phase {
+                Phase::Connected => match s.ip {
+                    Some(ip) => trf!("conectada ({ip})", "connected ({ip})"),
+                    None => tr!("conectada", "connected").into(),
+                },
+                Phase::Connecting => tr!("conectando…", "connecting…").into(),
+                Phase::Reconnecting => tr!("caiu, reconectando…", "dropped, reconnecting…").into(),
+                Phase::Failed(_) => tr!("não conectou", "did not connect").into(),
+                Phase::MissingOpenVpn => {
+                    tr!("OpenVPN não instalado", "OpenVPN not installed").into()
+                }
+                Phase::Stopped => tr!("desligada", "off").into(),
+            };
+            lines.push(format!("🛡 {name}: VPN {state}"));
+            // down: it was up and dropped, or it cannot connect
+            let down = match &s.phase {
+                Phase::Reconnecting => true,
+                Phase::Connecting => s.epoch > 0,
+                Phase::Failed(_) | Phase::MissingOpenVpn => true,
+                _ => false,
+            };
+            if down {
+                down_names.push(name.clone());
+                let (since, told) = self
+                    .vpn_down
+                    .entry(gid.clone())
+                    .or_insert((Instant::now(), false));
+                if !*told && since.elapsed() >= NOTIFY_AFTER {
+                    *told = tray::notify(
+                        &trf!(
+                            "{name}: a VPN caiu. As contas do grupo ficam sem internet até ela voltar.",
+                            "{name}: the VPN dropped. The group's accounts stay offline until it is back."
+                        ),
+                        true,
+                    );
+                }
+            } else if s.up() {
+                if let Some((_, true)) = self.vpn_down.remove(gid) {
+                    tray::notify(
+                        &trf!("{name}: a VPN voltou.", "{name}: the VPN is back."),
+                        false,
+                    );
+                }
+            }
+        }
+        self.vpn_down
+            .retain(|g, _| groups.iter().any(|(id, _)| id == g));
+        let tip = (!down_names.is_empty())
+            .then(|| trf!("VPN fora do ar: {}", "VPN down: {}", down_names.join(", ")));
+        (lines, !down_names.is_empty(), tip)
+    }
+
     /// Short line under the group name: IP and traffic while connected.
     pub(super) fn vpn_line(&self, g: &Group) -> Option<String> {
         g.active_vpn()?;

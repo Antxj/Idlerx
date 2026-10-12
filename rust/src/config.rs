@@ -191,6 +191,10 @@ pub struct Config {
     pub fps_selected: u32,
     pub window_size: Option<[f32; 2]>,
     pub window_maximized: bool,
+    /// The X sends the window to the tray (the games keep running).
+    pub close_to_tray: bool,
+    /// The "still running in the tray" notice was shown once.
+    pub tray_hint_shown: bool,
     /// Profile folders still to be deleted (they were in use).
     pub pending_delete: Vec<String>,
 }
@@ -216,6 +220,8 @@ impl Default for Config {
             fps_selected: 60,
             window_size: None,
             window_maximized: true,
+            close_to_tray: true,
+            tray_hint_shown: false,
             pending_delete: Vec::new(),
         }
     }

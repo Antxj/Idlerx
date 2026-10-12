@@ -78,8 +78,13 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
 - **Clear data** (log out) starts the account fresh without removing it
 - **Reopens the accounts** that were open, at the last visited address
 - **Automatic updates** through GitHub (details in [Updates](#updates))
+- **System tray**: the X sends Idlerx to the tray and the games keep
+  running (it can be turned off under **Settings**). Click the icon to
+  reopen it; its menu opens or pauses every account and quits. The icon
+  gets a red dot while a group's VPN is down, and Windows tells when a VPN
+  drops (after 15 s) and when it is back
 - **Single instance**: opening the executable again just brings the window
-  to the front
+  to the front (also from the tray)
 
 ### Saving resources
 
@@ -223,8 +228,8 @@ Account data **never leaves the computer**.
 ## Updates
 
 There is no dedicated server: the app queries
-`api.github.com/repos/Antxj/Idlerx/releases/latest` 30 seconds after opening
-and then every hour (it can be turned off under **Settings**). The request
+`api.github.com/repos/Antxj/Idlerx/releases/latest` right after opening and
+then every hour (it can be turned off under **Settings**). The request
 sends no user data.
 
 When there is a new version, a discreet link appears on the top bar. With

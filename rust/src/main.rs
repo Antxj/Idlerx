@@ -11,13 +11,14 @@ mod config;
 mod metrics;
 mod panels;
 mod single;
+mod tray;
 mod update;
 mod vpn;
 
 use eframe::egui;
 use std::time::Duration;
 
-const ICON_RGBA: &[u8] = include_bytes!("../assets/icon_64.rgba");
+pub const ICON_RGBA: &[u8] = include_bytes!("../assets/icon_64.rgba");
 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();

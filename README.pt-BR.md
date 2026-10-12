@@ -79,7 +79,14 @@ próprio progresso.</sub>
 - **Reabre as contas** que estavam abertas, no último endereço visitado
 - **Atualizações automáticas** pelo GitHub (detalhes em
   [Atualizações](#atualizações))
-- **Instância única**: abrir o executável de novo só traz a janela para a frente
+- **Bandeja do sistema**: o X manda o Idlerx para a bandeja e os jogos
+  continuam rodando (dá para desligar em **Configurações**). Clique no ícone
+  para reabrir; o menu dele abre ou pausa todas as contas e sai do
+  programa. O ícone ganha um ponto vermelho enquanto a VPN de um grupo
+  está fora do ar, e o Windows avisa quando uma VPN cai (depois de 15 s) e
+  quando volta
+- **Instância única**: abrir o executável de novo só traz a janela para a
+  frente (também da bandeja)
 
 ### Economia de recursos
 
@@ -220,8 +227,8 @@ Os dados das contas **nunca saem do computador**.
 ## Atualizações
 
 Não há servidor próprio: o app consulta
-`api.github.com/repos/Antxj/Idlerx/releases/latest` 30 segundos depois de
-abrir e depois a cada hora (dá para desligar em **Configurações**). A
+`api.github.com/repos/Antxj/Idlerx/releases/latest` logo ao abrir e
+depois a cada hora (dá para desligar em **Configurações**). A
 requisição não envia nenhum dado do usuário.
 
 Quando há versão nova, aparece um link discreto na barra superior. Em

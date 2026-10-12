@@ -15,7 +15,7 @@
 use crate::config::{self, Account, Config, Group, Layout, Theme};
 use crate::metrics::{self, Metrics};
 use crate::panels::{self, Hotkey, Panel};
-use crate::{i18n, update, vpn};
+use crate::{i18n, tray, update, vpn};
 use eframe::egui::{
     self, text::LayoutJob, Align, Align2, Color32, CornerRadius, FontId, Key, Margin, Pos2, Rect,
     RichText, Sense, Stroke, StrokeKind, TextFormat, Vec2,
@@ -191,6 +191,14 @@ pub struct App {
     install_result: Option<Result<bool, String>>,
     /// Accounts reopened with another network: attempts and when to try.
     retry_open: HashMap<String, (u8, Instant)>,
+    tray: Option<tray::Tray>,
+    /// The window is in the tray (minimized, without a taskbar button).
+    in_tray: bool,
+    last_tray: Instant,
+    /// Groups whose VPN is down: since when, and whether it was told.
+    vpn_down: HashMap<String, (Instant, bool)>,
+    /// A new version was told through a notification.
+    update_told: bool,
 }
 
 impl App {
@@ -226,6 +234,8 @@ impl App {
         let (economy, keep_active) = (cfg.economy, cfg.keep_active);
         let repaint = ctx.clone();
         let tunnels = vpn::Tunnels::new(Arc::new(move || repaint.request_repaint()));
+        let repaint = ctx.clone();
+        let tray = tray::Tray::new(move || repaint.request_repaint());
         let screenshot = std::env::var("IDLERX_SCREENSHOT")
             .ok()
             .filter(|v| !v.is_empty());
@@ -286,6 +296,11 @@ impl App {
             installing: None,
             install_result: None,
             retry_open: HashMap::new(),
+            tray,
+            in_tray: false,
+            last_tray: Instant::now() - POLL,
+            vpn_down: HashMap::new(),
+            update_told: false,
         }
     }
 
@@ -813,14 +828,14 @@ impl App {
         if close {
             if self.closing {
                 self.save();
+            } else if self.cfg.close_to_tray && self.tray.is_some() {
+                // the X sends it to the tray; quitting is in the tray menu
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.send_to_tray(ctx);
             } else {
                 // ask first; the dialog closes for real (see quit())
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                if minimized {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
-                }
-                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
-                self.dialog = Some(Dialog::ConfirmQuit);
+                self.show_and_ask_quit(ctx, minimized);
             }
         }
 
@@ -841,6 +856,106 @@ impl App {
             .selected
             .as_deref()
             .and_then(|id| self.cfg.account(id))
+    }
+
+    /// Brings the window back and asks whether to quit.
+    fn show_and_ask_quit(&mut self, ctx: &egui::Context, minimized: bool) {
+        if minimized || self.in_tray {
+            crate::single::show_main_window();
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        self.dialog = Some(Dialog::ConfirmQuit);
+    }
+
+    /// Minimizes without a taskbar button: the games keep running.
+    fn send_to_tray(&mut self, ctx: &egui::Context) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+        tray::taskbar_button(self.hwnd, false);
+        self.in_tray = true;
+        if !self.cfg.tray_hint_shown
+            && tray::notify(
+                tr!(
+                    "O Idlerx continua rodando na bandeja, com os jogos ativos. Clique no \
+                     ícone para reabrir; para sair, use o menu do ícone.",
+                    "Idlerx keeps running in the tray, with the games active. Click the \
+                     icon to reopen it; to quit, use the icon's menu."
+                ),
+                false,
+            )
+        {
+            self.cfg.tray_hint_shown = true;
+            self.mark_dirty();
+        }
+    }
+
+    /// Tray clicks and menu; the window back from the tray; the icon, its
+    /// tooltip and menu lines; notifications (VPN drops, new version).
+    fn tray_tick(&mut self, ctx: &egui::Context) {
+        let commands = self.tray.as_ref().map(|t| t.commands()).unwrap_or_default();
+        for c in commands {
+            match c {
+                tray::Command::Show => crate::single::show_main_window(),
+                tray::Command::OpenAll => {
+                    for id in self.cfg.display_order() {
+                        self.request_open(&id);
+                    }
+                }
+                tray::Command::PauseAll => {
+                    let ids: Vec<String> = self.cfg.accounts.iter().map(|a| a.id.clone()).collect();
+                    for id in ids {
+                        self.close_panel(&id);
+                    }
+                }
+                tray::Command::Quit => {
+                    let minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
+                    self.show_and_ask_quit(ctx, minimized);
+                }
+            }
+            ctx.request_repaint();
+        }
+        // restored by any means (icon, opening the exe again, Alt+Tab)
+        let minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
+        if self.in_tray && !minimized {
+            tray::taskbar_button(self.hwnd, true);
+            self.in_tray = false;
+        }
+        if self.last_tray.elapsed() < POLL {
+            return;
+        }
+        self.last_tray = Instant::now();
+        let (lines, alert, tip_vpn) = self.vpn_tray_status();
+        let open = self.panels.len();
+        let mut tip = match self.metrics.get(metrics::TOTAL) {
+            Some(u) => trf!(
+                "Idlerx · {open} conta(s) aberta(s)\nCPU {:.0}% · RAM {}",
+                "Idlerx · {open} open account(s)\nCPU {:.0}% · RAM {}",
+                u.cpu,
+                metrics::fmt_memory(u.memory)
+            ),
+            None => trf!(
+                "Idlerx · {open} conta(s) aberta(s)",
+                "Idlerx · {open} open account(s)"
+            ),
+        };
+        if let Some(t) = tip_vpn {
+            tip.push('\n');
+            tip.push_str(&t);
+        }
+        if let Some(t) = self.tray.as_mut() {
+            t.set_tooltip(&tip);
+            t.set_alert(alert);
+            t.set_status(lines);
+        }
+        // a new version, told once while the window is in the tray
+        if let (Some(n), true, false) = (update::available(), self.in_tray, self.update_told) {
+            self.update_told = tray::notify(
+                &trf!(
+                    "Versão {n} do Idlerx disponível: abra o Idlerx para atualizar.",
+                    "Idlerx {n} is available: open Idlerx to update."
+                ),
+                false,
+            );
+        }
     }
 
     /// Closes the app without asking (confirmed, restart or update).
@@ -898,6 +1013,7 @@ impl eframe::App for App {
         self.register_window(frame);
         self.after_update_check(ctx);
         self.sync_vpn();
+        self.tray_tick(ctx);
         self.open_next(ctx);
         self.poll(ctx);
         self.show_window(ctx);
