@@ -207,7 +207,7 @@ Useful variables for testing:
 | `IDLERX_INSTANCE` | separates a test instance from the everyday app |
 | `IDLERX_LANGUAGE` | forces `pt` or `en` |
 | `IDLERX_UPDATE_URL` | queries another address instead of the GitHub API |
-| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings`, `grid-menu`, `group` or `new-account` |
+| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings`, `grid-menu`, `group`, `new-account` or `pointer:x,y` (pointer resting there) |
 
 ## Where the data lives
 

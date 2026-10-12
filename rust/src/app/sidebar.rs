@@ -352,7 +352,7 @@ impl App {
             } else {
                 ("▶", tr!("Abrir", "Open"))
             };
-            let b = ui.put(r, egui::Button::new(icon).small()).side_tip(hint);
+            let b = ui.place(r, egui::Button::new(icon).small()).side_tip(hint);
             if b.clicked() {
                 button_clicked = true;
                 actions.push(if open {
@@ -648,7 +648,7 @@ impl App {
                     Vec2::new(24.0, GROUP_HEIGHT - 8.0),
                 );
                 x -= 26.0;
-                ui.put(r, egui::Button::new(icon).small())
+                ui.place(r, egui::Button::new(icon).small())
                     .side_tip(hint)
                     .clicked()
             };

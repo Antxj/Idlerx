@@ -878,6 +878,21 @@ impl App {
 }
 
 impl eframe::App for App {
+    /// IDLERX_SCREENSHOT=pointer:x,y keeps the pointer at that spot (in
+    /// points), to picture hover states.
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        let at = self
+            .screenshot
+            .as_deref()
+            .and_then(|s| s.strip_prefix("pointer:"))
+            .and_then(|p| p.split_once(','))
+            .and_then(|(x, y)| Some(Pos2::new(x.parse().ok()?, y.parse().ok()?)));
+        // placed for a while, then left still: tooltips show up too
+        if let Some(pos) = at.filter(|_| self.created.elapsed() < Duration::from_secs(10)) {
+            raw.events.push(egui::Event::PointerMoved(pos));
+        }
+    }
+
     /// Work that draws nothing; it also runs while the window is minimized.
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.register_window(frame);

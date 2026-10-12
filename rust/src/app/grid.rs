@@ -327,7 +327,7 @@ impl App {
                 Vec2::new(24.0, rect.height() - 4.0),
             );
             x -= 26.0;
-            ui.put(r, egui::Button::new(icon).frame(false))
+            ui.place(r, egui::Button::new(icon).frame(false))
                 .bar_tip(hint)
                 .clicked()
         };
