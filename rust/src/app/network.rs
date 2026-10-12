@@ -287,7 +287,7 @@ impl App {
                 tr!("desligada (nenhuma conta aberta)", "off (no open account)").to_string(),
             ),
         };
-        let mut tip = trf!("VPN ({}): {state}", "VPN ({}): {state}", v.label);
+        let mut tip = trf!("VPN: {state}", "VPN: {state}");
         if s.up() {
             if let Some(ip) = s.ip {
                 tip.push_str(&trf!(
@@ -309,6 +309,7 @@ impl App {
                 vpn::fmt_bytes(s.up_total)
             ));
         }
+        tip.push_str(&trf!("\nArquivo: {}", "\nFile: {}", v.label));
         tip.push_str(tr!(
             "\n\nAs contas do grupo só acessam a internet pela VPN: se ela cair, ficam \
              sem conexão até ela voltar.",

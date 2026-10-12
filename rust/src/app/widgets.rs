@@ -24,6 +24,10 @@ pub(super) trait SideTip {
 
 impl SideTip for egui::Response {
     fn side_tip(self, text: impl Into<egui::WidgetText>) -> Self {
+        // a menu is open (right click): the tooltip would sit on top of it
+        if egui::Popup::is_any_open(&self.ctx) {
+            return self;
+        }
         let band = Rect::from_x_y_ranges(6.0..=SIDEBAR_WIDTH - 6.0, self.rect.y_range());
         let mut tip = egui::Tooltip::for_enabled(&self);
         tip.popup = tip
@@ -34,7 +38,10 @@ impl SideTip for egui::Response {
             .width(SIDEBAR_WIDTH - 28.0);
         let text = text.into();
         tip.show(|ui| {
-            ui.label(text);
+            // full width from the first frame: long words (file names)
+            // wrap inside it instead of spilling out of a narrow box
+            ui.set_min_width(SIDEBAR_WIDTH - 40.0);
+            ui.add(egui::Label::new(text).wrap_mode(egui::TextWrapMode::Wrap));
         });
         self
     }
