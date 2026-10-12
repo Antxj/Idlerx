@@ -99,10 +99,11 @@ impl App {
                 Dialog::Edit(st)
             }
             Dialog::Group(mut st) => {
+                let economy = self.cfg.economy;
                 let modal = egui::Modal::new(egui::Id::new("group")).show(ctx, |ui| {
-                    ui.set_width(360.0);
+                    ui.set_width(420.0);
                     ui.heading(if st.id.is_some() {
-                        tr!("Renomear grupo", "Rename group")
+                        tr!("Editar grupo", "Edit group")
                     } else {
                         tr!("Novo grupo", "New group")
                     });
@@ -117,6 +118,13 @@ impl App {
                     );
                     if !r.has_focus() && st.name.is_empty() {
                         r.request_focus();
+                    }
+                    ui.add_space(10.0);
+                    ui.separator();
+                    network::vpn_section(ui, &mut st.vpn, economy);
+                    if let Some(e) = &st.error {
+                        ui.add_space(4.0);
+                        ui.label(RichText::new(e).color(DANGER));
                     }
                     ui.add_space(10.0);
                     let mut save = ui.input(|i| i.key_pressed(Key::Enter));
@@ -144,26 +152,42 @@ impl App {
                 if cancel || modal.should_close() {
                     keep = false;
                 } else if save && !name.is_empty() {
-                    match &st.id {
+                    let gid = match &st.id {
                         Some(gid) => {
                             if let Some(g) = self.cfg.group_mut(gid) {
                                 g.name = name;
                             }
+                            gid.clone()
                         }
                         None => {
                             let gid = config::new_id();
                             self.cfg.groups.push(Group {
                                 id: gid.clone(),
                                 name,
-                                collapsed: false,
+                                ..Group::default()
                             });
-                            if let Some(acc) = &st.assign {
-                                self.cfg.move_to_group(acc, Some(&gid));
+                            gid
+                        }
+                    };
+                    match self.save_group_vpn(&gid, &mut st.vpn) {
+                        Ok(()) => {
+                            if let Some(acc) = st.assign.take() {
+                                let before = self.vpn_of(&acc);
+                                self.cfg.move_to_group(&acc, Some(&gid));
+                                if self.vpn_of(&acc) != before {
+                                    self.restart_account(&acc);
+                                }
                             }
+                            keep = false;
+                        }
+                        Err(e) => {
+                            // a new group stays (with its name): the dialog
+                            // goes on editing it
+                            st.id = Some(gid);
+                            st.error = Some(e);
                         }
                     }
                     self.mark_dirty();
-                    keep = false;
                 }
                 Dialog::Group(st)
             }

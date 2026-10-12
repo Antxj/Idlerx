@@ -116,7 +116,10 @@ impl App {
             ui.label(RichText::new(config::domain(&a.url)).color(weak(dark)));
             ui.add_space(6.0);
             if opening {
-                ui.spinner();
+                // waiting for the group's VPN, or the page being created
+                if !self.vpn_wait(ui, &a.id, actions) {
+                    ui.spinner();
+                }
             } else {
                 if let Some(e) = failed {
                     ui.label(

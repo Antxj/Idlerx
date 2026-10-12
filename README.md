@@ -52,6 +52,11 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
   in the grid** (click again for all of them), the arrow collapses/expands,
   drag groups to reorder them, drag accounts into them, open or pause a
   whole group at once
+- **VPN per group** (OpenVPN): choose a `.ovpn` file for a group and its
+  accounts reach the internet only through the VPN, with a **kill switch**:
+  if the VPN drops, they stay offline until it is back, never through your
+  connection. The rest of the computer and the other groups do not go
+  through it. Details in [Group VPN](#group-vpn)
 - **Focus mode** (F11): hides the list and the bar, only the game remains.
   F11 or Esc brings everything back
 - **CPU and RAM** of each account (in the list and on the grid cell), of
@@ -99,6 +104,44 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
   the numbers)
 - **Pausing** accounts you are not using frees all their memory
 
+## Group VPN
+
+Right-click a group › **Edit (name, VPN)…** › check **Use a VPN (OpenVPN)
+in this group** and choose the `.ovpn` file. If the VPN asks for a login,
+pick the kind (username and password, Google Authenticator token, or
+both); the password and token seed stay on this computer, encrypted by
+Windows.
+
+- **When Idlerx opens**, the group's accounts wait for the VPN to connect
+  and only then open.
+- The **shield** next to the group name shows the state (green: connected,
+  amber: connecting or reconnecting, red: error); below the name are the
+  **IP** the sites see and the group's **download and upload**. Hover it for
+  the totals.
+- **Kill switch**: the group's pages can only go out through a local
+  "gate" pinned to the VPN network adapter. If the VPN drops, it cuts the
+  open connections at once and refuses new ones; there is no path through
+  your regular connection. When the VPN is back, the pages reload by
+  themselves.
+- **No leaks**: DNS is resolved through the VPN, WebRTC does not reveal the
+  real IP and IPv6 is blocked (everything goes out over IPv4 through the
+  VPN). Checked on browserleaks.com (IP, DNS and WebRTC).
+- **The rest of the computer does not change**: Idlerx ignores the routes
+  and DNS servers the VPN server pushes and adds only one route through the
+  VPN, with the lowest possible priority, used only by the group's gate.
+- Each group can have its own VPN, at the same time.
+- In **economy mode**, the accounts of a group with a VPN use a browser of
+  their own (about 300 MB more per group); after turning a group's VPN on
+  or off, log in to the games once again.
+
+Requires **OpenVPN Community**. If it is not installed, Idlerx offers to
+install it: the official installer (signed by OpenVPN Inc.) is inside the
+executable, and Windows asks for administrator permission. On the first
+connection Windows may also ask once to authorize your account for the
+OpenVPN service; after that Idlerx connects without asking for permissions.
+The VPN runs through OpenVPN's own service, so it works alongside other
+VPNs (including OpenVPN GUI).
+
 ## Requirements
 
 - **Windows 10 or 11**
@@ -134,7 +177,7 @@ cd rust
 rustup override set stable-x86_64-pc-windows-msvc   # only if MSVC is not your default
 cargo test
 cargo run
-.\build-release.ps1      # tests + release without local paths + checks
+.\build-release.ps1      # OpenVPN installer + tests + release without local paths + checks
 ```
 
 Structure:
@@ -149,6 +192,9 @@ Structure:
 - [`metrics.rs`](rust/src/metrics.rs): CPU and memory per process tree
 - [`i18n.rs`](rust/src/i18n.rs): language and the `tr!`/`trf!` text macros
 - [`update.rs`](rust/src/update.rs): checking for and installing new versions
+- [`vpn/`](rust/src/vpn/mod.rs): VPN of groups: OpenVPN through its
+  interactive service, the gate (SOCKS5 proxy pinned to the VPN adapter, kill
+  switch), DNS through the tunnel, embedded installer
 - [`single.rs`](rust/src/single.rs): single instance
 
 Useful variables for testing:
@@ -159,13 +205,16 @@ Useful variables for testing:
 | `IDLERX_INSTANCE` | separates a test instance from the everyday app |
 | `IDLERX_LANGUAGE` | forces `pt` or `en` |
 | `IDLERX_UPDATE_URL` | queries another address instead of the GitHub API |
-| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings` or `grid-menu` |
+| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings`, `grid-menu` or `group` |
 
 ## Where the data lives
 
 - Settings and account list: `%APPDATA%\Idlerx\config.json`
 - Browser profiles (cookies, cache, logins) of each account:
   `%LOCALAPPDATA%\Idlerx\profiles\`
+- Group VPN: `%APPDATA%\Idlerx\vpn\` (a copy of each `.ovpn`, passwords
+  and seeds encrypted by Windows in `secrets.dat`, OpenVPN logs in
+  `logs\`)
 
 Account data **never leaves the computer**.
 
@@ -191,7 +240,11 @@ When there is a new version, a discreet link appears on the top bar. With
 ## Privacy
 
 Idlerx does not collect or send any data. Its only connections are the
-**sites you open** and the **version check** on GitHub (described above).
+**sites you open**, the **version check** on GitHub (described above) and,
+in groups with a VPN, **your VPN server** and one request to
+`api.ipify.org` **through the VPN itself** on each connection, to show the
+IP the sites see (and to check the tunnel works before the pages are let
+through).
 
 ## Responsible use
 

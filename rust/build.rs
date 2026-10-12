@@ -1,12 +1,23 @@
 // Embeds the icon, the manifest and the version information into the .exe.
 // The .rc file is generated here so its version always matches Cargo.toml.
+//
+// Also embeds the official OpenVPN installer (assets/openvpn.msi), used by
+// the VPN of groups. The MSI is NOT in the repository: build-release.ps1
+// downloads it and verifies its SHA-256 and signature. Without the file the
+// executable has no installer (the app points to the download page).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+/// OpenVPN installer version expected in assets/openvpn.msi (kept in sync
+/// with build-release.ps1, which downloads it and verifies the hash).
+const OPENVPN_MSI_VERSION: &str = "2.7.6-I001";
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=assets/icon.ico");
     println!("cargo:rerun-if-changed=assets/app.manifest");
+    println!("cargo:rerun-if-changed=assets/openvpn.msi");
+    embed_openvpn_msi();
 
     if std::env::var_os("CARGO_CFG_WINDOWS").is_none() {
         return;
@@ -68,4 +79,18 @@ END
     embed_resource::compile(&out, embed_resource::NONE)
         .manifest_required()
         .expect("embed resources");
+}
+
+/// include_bytes! needs a file that always exists: without the MSI an empty
+/// one is used (the app sees it at run time).
+fn embed_openvpn_msi() {
+    let out = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR")).join("openvpn.msi");
+    let source = Path::new("assets/openvpn.msi");
+    if source.exists() {
+        std::fs::copy(source, &out).expect("copy the OpenVPN installer");
+    } else {
+        std::fs::write(&out, b"").expect("write an empty installer");
+    }
+    println!("cargo:rustc-env=IDLERX_OPENVPN_MSI={}", out.display());
+    println!("cargo:rustc-env=IDLERX_OPENVPN_MSI_VERSION={OPENVPN_MSI_VERSION}");
 }

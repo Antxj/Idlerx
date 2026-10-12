@@ -24,6 +24,31 @@ Idlerx. The WebView2 loader is linked into the executable through the
 webview2-com-sys crate, under the Microsoft WebView2 SDK license
 (BSD-3-Clause style): https://www.nuget.org/packages/Microsoft.Web.WebView2/License
 
+OpenVPN Community Edition
+-------------------------
+Idlerx.exe embeds the official OpenVPN Community installer
+(OpenVPN-2.7.6-I001-amd64.msi), redistributed without any modification,
+exactly as published by OpenVPN Inc. at:
+
+    https://build.openvpn.net/downloads/releases/
+
+The package is digitally signed by "OpenVPN Inc." and its integrity
+(SHA-256) is verified on every release build. It is installed only when
+the user asks for it (VPN of a group).
+
+OpenVPN is free software, licensed under the GNU General Public License
+version 2 (GPLv2): https://github.com/OpenVPN/openvpn/blob/master/COPYING
+Source code of the distributed binary:
+https://build.openvpn.net/downloads/releases/openvpn-2.7.6.tar.gz
+
+Idlerx is an independent program: it does not link to or incorporate
+OpenVPN code. It runs openvpn.exe as a separate process (through the
+OpenVPN interactive service) and talks to it through its management
+interface, a local socket.
+
+"OpenVPN" is a registered trademark of OpenVPN Inc. Idlerx is not
+produced, sponsored or endorsed by OpenVPN Inc.
+
 Fonts
 -----
 The interface fonts come with egui (epaint_default_fonts): Ubuntu Light

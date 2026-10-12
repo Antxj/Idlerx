@@ -82,6 +82,60 @@ pub struct Group {
     pub name: String,
     /// Accounts hidden in the side list.
     pub collapsed: bool,
+    /// The group's accounts go out only through this VPN.
+    pub vpn: Option<GroupVpn>,
+}
+
+impl Group {
+    /// VPN in use (set up and turned on).
+    pub fn active_vpn(&self) -> Option<&GroupVpn> {
+        self.vpn
+            .as_ref()
+            .filter(|v| v.enabled && !v.file.is_empty())
+    }
+}
+
+/// How the VPN of a group logs in (beyond its certificate).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum VpnAuth {
+    /// Certificate only (the .ovpn has everything).
+    #[default]
+    Certificate,
+    Password,
+    /// Username + token of the moment (Google Authenticator).
+    Token,
+    /// Username + password followed by the token.
+    PasswordAndToken,
+}
+
+impl VpnAuth {
+    pub fn uses_user(self) -> bool {
+        self != VpnAuth::Certificate
+    }
+
+    pub fn uses_password(self) -> bool {
+        matches!(self, VpnAuth::Password | VpnAuth::PasswordAndToken)
+    }
+
+    pub fn uses_token(self) -> bool {
+        matches!(self, VpnAuth::Token | VpnAuth::PasswordAndToken)
+    }
+}
+
+/// VPN of a group. The password and token seed are kept apart, encrypted
+/// by Windows (`vpn::secrets`).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GroupVpn {
+    pub enabled: bool,
+    /// .ovpn in use: a copy inside Idlerx's folder, or the original when it
+    /// points to other files next to it.
+    pub file: String,
+    /// Name of the chosen file, for display.
+    pub label: String,
+    pub auth: VpnAuth,
+    pub username: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -382,13 +436,27 @@ pub fn shared_dir() -> PathBuf {
     profiles_dir().join("_shared")
 }
 
+/// Economy mode browser of a group with a VPN (its proxy is fixed for the
+/// whole browser, so it cannot be the shared one).
+pub fn vpn_shared_dir(group: &str) -> PathBuf {
+    profiles_dir().join(format!("_vpn_{group}"))
+}
+
 /// Every place an account's browser data can be: its own folder and its
-/// profile inside the shared browser (economy mode).
-fn profile_paths(profile: &str) -> [PathBuf; 2] {
-    [
+/// profile inside the shared browsers (economy mode, with and without VPN).
+fn profile_paths(profile: &str) -> Vec<PathBuf> {
+    let mut out = vec![
         profile_dir(profile),
         shared_dir().join("EBWebView").join(profile),
-    ]
+    ];
+    if let Ok(dirs) = std::fs::read_dir(profiles_dir()) {
+        for d in dirs.flatten() {
+            if d.file_name().to_string_lossy().starts_with("_vpn_") {
+                out.push(d.path().join("EBWebView").join(profile));
+            }
+        }
+    }
+    out
 }
 
 fn config_path() -> PathBuf {
@@ -611,6 +679,7 @@ mod tests {
             id: id.into(),
             name: id.into(),
             collapsed: false,
+            vpn: None,
         });
     }
 

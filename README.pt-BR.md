@@ -53,6 +53,11 @@ próprio progresso.</sub>
   grade** (de novo: todas), a seta recolhe/expande, arraste grupos para
   mudar a ordem, arraste contas para dentro, abra ou pause o grupo inteiro
   de uma vez
+- **VPN por grupo** (OpenVPN): escolha um arquivo `.ovpn` no grupo e as
+  contas dele só acessam a internet pela VPN, com **kill switch**: se a VPN
+  cair, elas ficam sem internet até ela voltar, nunca pela sua conexão. O
+  resto do computador e os outros grupos não passam por ela. Detalhes em
+  [VPN dos grupos](#vpn-dos-grupos)
 - **Modo foco** (F11): some com a lista e a barra, fica só o jogo. F11 ou Esc
   traz tudo de volta
 - **CPU e RAM** de cada conta (na lista e no quadro da grade), de cada
@@ -99,6 +104,43 @@ próprio progresso.</sub>
 - A interface só se redesenha quando algo muda (ou 1×/s para os números)
 - **Pausar** contas que você não está usando libera toda a memória delas
 
+## VPN dos grupos
+
+Clique com o botão direito num grupo › **Editar (nome, VPN)…** › marque
+**Usar VPN (OpenVPN) neste grupo** e escolha o arquivo `.ovpn`. Se a VPN
+pedir login, escolha o tipo (usuário e senha, token do Google
+Authenticator ou os dois); a senha e a seed do token ficam neste computador,
+criptografadas pelo Windows.
+
+- **Ao abrir o Idlerx**, as contas do grupo esperam a VPN conectar e só
+  então abrem.
+- O **escudo** ao lado do nome do grupo mostra o estado (verde: conectada,
+  amarelo: conectando ou reconectando, vermelho: erro); embaixo do nome
+  aparecem o **IP** que os sites veem e o **download e upload** do grupo.
+  Passe o mouse para ver os totais.
+- **Kill switch**: as páginas do grupo só conseguem sair por um "porteiro"
+  local preso à placa de rede da VPN. Se a VPN cai, ele corta na hora as
+  conexões abertas e recusa as novas; não existe caminho pela sua conexão
+  normal. Quando a VPN volta, as páginas recarregam sozinhas.
+- **Sem vazamentos**: o DNS é resolvido pela VPN, o WebRTC não revela o IP
+  real e o IPv6 fica bloqueado (tudo sai por IPv4 pela VPN). Conferido no
+  browserleaks.com (IP, DNS e WebRTC).
+- **O resto do computador não muda**: o Idlerx ignora as rotas e os DNS que
+  o servidor da VPN manda e adiciona só uma rota pela VPN com a menor
+  prioridade possível, usada apenas pelo porteiro do grupo.
+- Cada grupo pode ter a sua VPN, ao mesmo tempo.
+- No **modo econômico**, as contas de um grupo com VPN usam um navegador só
+  delas (cerca de 300 MB a mais por grupo); ao ligar ou desligar a VPN de
+  um grupo, entre nos jogos de novo uma vez.
+
+Requer o **OpenVPN Community**. Se ele não estiver instalado, o Idlerx
+oferece instalar: o instalador oficial (assinado pela OpenVPN Inc.) vem
+dentro do executável, e o Windows pede permissão de administrador. Na
+primeira conexão o Windows também pode pedir uma vez para autorizar sua
+conta no serviço do OpenVPN; depois disso o Idlerx conecta sem pedir
+permissões. A VPN usa o serviço do próprio OpenVPN, então funciona junto
+com outras VPNs (inclusive o OpenVPN GUI).
+
 ## Requisitos
 
 - **Windows 10 ou 11**
@@ -133,7 +175,7 @@ cd rust
 rustup override set stable-x86_64-pc-windows-msvc   # só se o MSVC não for o seu padrão
 cargo test
 cargo run
-.\build-release.ps1      # testes + release sem caminhos locais + verificações
+.\build-release.ps1      # instalador do OpenVPN + testes + release sem caminhos locais + verificações
 ```
 
 Estrutura:
@@ -148,6 +190,9 @@ Estrutura:
 - [`metrics.rs`](rust/src/metrics.rs): CPU e memória por árvore de processos
 - [`i18n.rs`](rust/src/i18n.rs): idioma e as macros `tr!`/`trf!`
 - [`update.rs`](rust/src/update.rs): verificação e instalação de versões novas
+- [`vpn/`](rust/src/vpn/mod.rs): VPN dos grupos: OpenVPN pelo serviço
+  dele, o porteiro (proxy SOCKS5 preso à placa da VPN, kill switch), DNS pelo
+  túnel, instalador embutido
 - [`single.rs`](rust/src/single.rs): instância única
 
 Variáveis úteis para testes:
@@ -158,13 +203,16 @@ Variáveis úteis para testes:
 | `IDLERX_INSTANCE` | separa uma instância de teste do app de uso diário |
 | `IDLERX_LANGUAGE` | força `pt` ou `en` |
 | `IDLERX_UPDATE_URL` | consulta outro endereço em vez da API do GitHub |
-| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings` ou `grid-menu` |
+| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu` ou `group` |
 
 ## Onde ficam os dados
 
 - Configurações e lista de contas: `%APPDATA%\Idlerx\config.json`
 - Perfis do navegador (cookies, cache, logins) de cada conta:
   `%LOCALAPPDATA%\Idlerx\profiles\`
+- VPN dos grupos: `%APPDATA%\Idlerx\vpn\` (cópia de cada `.ovpn`,
+  senhas e seeds criptografadas pelo Windows em `secrets.dat`, logs do
+  OpenVPN em `logs\`)
 
 Os dados das contas **nunca saem do computador**.
 
@@ -189,7 +237,11 @@ Quando há versão nova, aparece um link discreto na barra superior. Em
 ## Privacidade
 
 O Idlerx não coleta nem envia dados. As únicas conexões são os **sites que
-você abre** e a **verificação de versões** no GitHub (descrita acima).
+você abre**, a **verificação de versões** no GitHub (descrita acima) e, nos
+grupos com VPN, o **servidor da sua VPN** e uma consulta a
+`api.ipify.org` **pela própria VPN** a cada conexão, para mostrar o IP que
+os sites veem (e conferir que o túnel funciona antes de liberar as
+páginas).
 
 ## Uso responsável
 

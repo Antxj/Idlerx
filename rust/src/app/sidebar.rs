@@ -510,8 +510,11 @@ impl App {
 
     pub(super) fn group_header(&self, ui: &mut egui::Ui, g: &Group, actions: &mut Vec<Action>) {
         let dark = ui.visuals().dark_mode;
+        // a group with a connected VPN shows its IP and traffic below the name
+        let vpn_line = self.vpn_line(g);
+        let height = GROUP_HEIGHT + if vpn_line.is_some() { 12.0 } else { 0.0 };
         let (rect, resp) = ui.allocate_exact_size(
-            Vec2::new(ui.available_width(), GROUP_HEIGHT),
+            Vec2::new(ui.available_width(), height),
             Sense::click_and_drag(),
         );
         let ids = self.cfg.accounts_in(Some(&g.id));
@@ -577,7 +580,7 @@ impl App {
         }
 
         // expand/collapse triangle
-        let c = Pos2::new(rect.left() + 12.0, rect.center().y);
+        let c = Pos2::new(rect.left() + 12.0, rect.top() + GROUP_HEIGHT / 2.0);
         let tri = if g.collapsed {
             vec![
                 c + Vec2::new(-3.0, -5.0),
@@ -595,22 +598,46 @@ impl App {
 
         let hovered = resp.hovered() || ui.rect_contains_pointer(rect);
         let count = format!("{open}/{}", ids.len());
-        let right = rect.right() - if hovered { 58.0 } else { 8.0 };
-        painter.text(
-            Pos2::new(right, rect.center().y),
+        let mid = rect.top() + GROUP_HEIGHT / 2.0;
+        let mut right = rect.right() - if hovered { 58.0 } else { 8.0 };
+        let count_rect = painter.text(
+            Pos2::new(right, mid),
             Align2::RIGHT_CENTER,
             &count,
             FontId::proportional(11.0),
             weak(dark),
         );
+        right = count_rect.left() - 4.0;
+        // the group's VPN: a shield in its state color (details in the tooltip)
+        let badge = self.vpn_badge(g);
+        if let Some((color, _)) = &badge {
+            let r = painter.text(
+                Pos2::new(right, mid),
+                Align2::RIGHT_CENTER,
+                "🛡",
+                FontId::proportional(11.0),
+                *color,
+            );
+            right = r.left() - 4.0;
+        }
         single_line(
             &painter,
             Pos2::new(rect.left() + 24.0, rect.top() + 7.0),
             &g.name,
             FontId::proportional(13.0),
             ui.visuals().strong_text_color(),
-            right - 34.0 - (rect.left() + 24.0),
+            right - 6.0 - (rect.left() + 24.0),
         );
+        if let Some(line) = &vpn_line {
+            single_line(
+                &painter,
+                Pos2::new(rect.left() + 24.0, rect.top() + GROUP_HEIGHT - 6.0),
+                line,
+                FontId::proportional(10.5),
+                weak(dark),
+                rect.width() - 32.0,
+            );
+        }
 
         let mut button_clicked = false;
         if hovered {
@@ -618,7 +645,7 @@ impl App {
             let mut button = |icon: &str, hint: &str| -> bool {
                 let r = Rect::from_min_size(
                     Pos2::new(x - 24.0, rect.top() + 4.0),
-                    Vec2::new(24.0, rect.height() - 8.0),
+                    Vec2::new(24.0, GROUP_HEIGHT - 8.0),
                 );
                 x -= 26.0;
                 ui.put(r, egui::Button::new(icon).small())
@@ -658,11 +685,12 @@ impl App {
                 mem += u.memory;
             }
         }
+        let vpn_tip = badge.map(|(_, t)| format!("{t}\n\n")).unwrap_or_default();
         let tip = trf!(
-            "{} conta(s) · {open} aberta(s)\nCPU {cpu:.0}% · RAM {}\n\nClique para mostrar só este grupo na grade \
+            "{vpn_tip}{} conta(s) · {open} aberta(s)\nCPU {cpu:.0}% · RAM {}\n\nClique para mostrar só este grupo na grade \
              (de novo: todas). A seta recolhe/expande. Arraste para mudar a ordem; \
              solte contas aqui para colocá-las no grupo.",
-            "{} account(s) · {open} open\nCPU {cpu:.0}% · RAM {}\n\nClick to show only this group in the grid \
+            "{vpn_tip}{} account(s) · {open} open\nCPU {cpu:.0}% · RAM {}\n\nClick to show only this group in the grid \
              (again: all). The arrow collapses/expands. Drag to reorder; drop \
              accounts here to put them in the group.",
             ids.len(),
@@ -711,8 +739,18 @@ impl App {
                 actions.push(Action::MoveGroup(g.id.clone(), 1));
             }
             ui.separator();
-            if ui.button(tr!("✏  Renomear…", "✏  Rename…")).clicked() {
+            if ui
+                .button(tr!("✏  Editar (nome, VPN)…", "✏  Edit (name, VPN)…"))
+                .clicked()
+            {
                 actions.push(Action::RenameGroup(g.id.clone()));
+            }
+            if g.active_vpn().is_some()
+                && ui
+                    .button(tr!("⟳  Reconectar a VPN", "⟳  Reconnect the VPN"))
+                    .clicked()
+            {
+                actions.push(Action::RetryVpn(g.id.clone()));
             }
             if ui
                 .button(

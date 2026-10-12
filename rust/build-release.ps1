@@ -33,6 +33,30 @@ $flags = @(
 )
 $env:CARGO_ENCODED_RUSTFLAGS = $flags -join $separator
 
+# The official OpenVPN installer, embedded for the VPN of groups. It is not
+# in the repository: it is downloaded from the official server and verified
+# by SHA-256 and by its Authenticode signature (OpenVPN Inc.) before going
+# in. Keep the version in sync with build.rs.
+$msiVersion = "2.7.6-I001"
+$msiUrl = "https://build.openvpn.net/downloads/releases/OpenVPN-$msiVersion-amd64.msi"
+$msiSha256 = "48C96AC092A81C6303F059EACE51C7BF878794E9575B329E82894848E0E529FC"
+$msiPath = Join-Path $crateRoot "assets\openvpn.msi"
+if (-not (Test-Path $msiPath) -or
+    (Get-FileHash -Algorithm SHA256 $msiPath).Hash -ne $msiSha256) {
+    Write-Host "Downloading the official OpenVPN installer ($msiVersion)..."
+    Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing -TimeoutSec 300
+}
+$msiHash = (Get-FileHash -Algorithm SHA256 $msiPath).Hash
+if ($msiHash -ne $msiSha256) {
+    Remove-Item $msiPath
+    throw "OpenVPN installer SHA-256 does not match (expected $msiSha256, got $msiHash)."
+}
+$signature = Get-AuthenticodeSignature $msiPath
+if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "OpenVPN") {
+    throw "Invalid OpenVPN installer signature or another publisher: $($signature.Status)"
+}
+Write-Host "OpenVPN installer verified (SHA-256 and OpenVPN Inc. signature)."
+
 Push-Location $crateRoot
 try {
     cargo test --locked
@@ -52,8 +76,17 @@ try {
 
     $binary = Join-Path $targetRoot "release\idlerx.exe"
     $bytes = [IO.File]::ReadAllBytes($binary)
-    $singleByteText = [Text.Encoding]::GetEncoding(28591).GetString($bytes)
-    $utf16Text = [Text.Encoding]::Unicode.GetString($bytes)
+    $latin1 = [Text.Encoding]::GetEncoding(28591)
+    $singleByteText = $latin1.GetString($bytes)
+    # the embedded OpenVPN installer is checked by its own hash and signature;
+    # the checks below look at Idlerx's own code only
+    $msiText = $latin1.GetString([IO.File]::ReadAllBytes($msiPath))
+    $msiAt = $singleByteText.IndexOf($msiText, [StringComparison]::Ordinal)
+    if ($msiAt -lt 0) {
+        throw "The OpenVPN installer was not embedded in the executable."
+    }
+    $singleByteText = $singleByteText.Remove($msiAt, $msiText.Length)
+    $utf16Text = [Text.Encoding]::Unicode.GetString($latin1.GetBytes($singleByteText))
     $forbidden = @($userRoot, $crateRoot, $env:USERNAME, $env:COMPUTERNAME) |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
         Select-Object -Unique
@@ -75,6 +108,7 @@ try {
 
     $hash = (Get-FileHash -Algorithm SHA256 $binary).Hash
     Write-Host "Release verified: $binary"
+    Write-Host "Embedded OpenVPN installer: $msiVersion"
     Write-Host "SHA256: $hash"
 } finally {
     Pop-Location

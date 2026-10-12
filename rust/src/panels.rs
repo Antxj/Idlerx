@@ -34,7 +34,7 @@ use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
 /// WebView2 browser arguments. With `keep_active`, hidden or covered pages
 /// keep their timers at full speed (idle games keep playing while another
 /// account is on screen).
-fn browser_args(keep_active: bool) -> String {
+fn browser_args(keep_active: bool, proxy: Option<u16>) -> String {
     // mini menu, PDF menu and SmartScreen off (same as wry's defaults)
     let mut s = String::from("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection");
     if keep_active {
@@ -47,7 +47,29 @@ fn browser_args(keep_active: bool) -> String {
     }
     // games may play sound without a click first
     s.push_str(" --autoplay-policy=no-user-gesture-required");
+    if let Some(port) = proxy {
+        s.push(' ');
+        s.push_str(&vpn_args(port));
+    }
     s
+}
+
+/// Group with a VPN: every request goes through the group's gate (see
+/// `vpn::proxy`), with nothing that could reach the regular network.
+fn vpn_args(port: u16) -> String {
+    [
+        // only the gate, even for local addresses (the gate refuses them)
+        format!("--proxy-server=socks5://127.0.0.1:{port}"),
+        "--proxy-bypass-list=<-loopback>".into(),
+        // names are resolved by the gate, through the tunnel: the browser
+        // itself cannot resolve anything
+        "\"--host-resolver-rules=MAP * ~NOTFOUND , EXCLUDE 127.0.0.1\"".into(),
+        // WebRTC only through the proxy, which carries no UDP: no STUN
+        // request reveals the real address
+        "--force-webrtc-ip-handling-policy=disable_non_proxied_udp".into(),
+        "--disable-quic".into(),
+    ]
+    .join(" ")
 }
 
 /// Limits how often the pages draw (see the file).
@@ -65,29 +87,49 @@ pub enum Hotkey {
 /// Result of [`open`], filled in when the page exists (or failed).
 pub type PanelSlot = Rc<RefCell<Option<Result<Panel, String>>>>;
 
+/// Page processes of each page: (browser pid, main frame id) -> pids.
+pub type Renderers = HashMap<(u32, u32), Vec<u32>>;
+
 /// Wakes the interface up (a repaint) from a WebView2 callback.
 pub type Wake = Rc<dyn Fn()>;
 
-/// Starts opening an account inside `parent` (the main window). `ready` is
+/// How an account's browser is started (fixed while that browser runs).
+pub struct Browser<'a> {
+    /// No background throttling (see `browser_args`).
+    pub keep_active: bool,
+    /// Shared browser, one profile per account.
+    pub economy: bool,
+    /// Group with a VPN: (group id, port of its gate).
+    pub vpn: Option<(&'a str, u16)>,
+}
+
+/// Starts opening an account inside `parent` (the main window). `wake` is
 /// called on the UI thread when the slot is filled.
 pub fn open(
     parent: isize,
     account: &Account,
-    keep_active: bool,
-    economy: bool,
+    browser: Browser,
     save_passwords: bool,
     dark: bool,
     wake: Wake,
 ) -> PanelSlot {
+    let Browser {
+        keep_active,
+        economy,
+        vpn,
+    } = browser;
     let slot: PanelSlot = Rc::new(RefCell::new(None));
-    let dir = if economy {
-        config::shared_dir()
-    } else {
-        config::profile_dir(&account.profile)
+    // a browser's arguments (the proxy) are fixed for its whole folder: in
+    // economy mode each group with a VPN has a shared browser of its own
+    let dir = match (economy, vpn) {
+        (true, Some((group, _))) => config::vpn_shared_dir(group),
+        (true, None) => config::shared_dir(),
+        (false, _) => config::profile_dir(&account.profile),
     };
     let _ = std::fs::create_dir_all(&dir);
     let options = CoreWebView2EnvironmentOptions::default();
-    unsafe { options.set_additional_browser_arguments(browser_args(keep_active)) };
+    let args = browser_args(keep_active, vpn.map(|(_, port)| port));
+    unsafe { options.set_additional_browser_arguments(args) };
 
     let s = slot.clone();
     let account = account.clone();
@@ -506,11 +548,9 @@ impl Panel {
 
     /// Asks the browser which page processes serve each main frame: fills
     /// `out` with main frame id -> process ids (asynchronously).
-    pub fn request_renderers(
-        &self,
-        out: Rc<RefCell<HashMap<u32, Vec<u32>>>>,
-        ready: impl Fn() + 'static,
-    ) {
+    pub fn request_renderers(&self, out: Rc<RefCell<Renderers>>, ready: impl Fn() + 'static) {
+        // frame ids are only unique inside one browser: keyed by its pid
+        let browser = self.pid;
         let Ok(env13) = self.env.cast::<ICoreWebView2Environment13>() else {
             return;
         };
@@ -520,7 +560,7 @@ impl Panel {
                     return Ok(());
                 }
                 let Some(list) = list else { return Ok(()) };
-                let mut map: HashMap<u32, Vec<u32>> = HashMap::new();
+                let mut map: Renderers = HashMap::new();
                 unsafe {
                     let mut n = 0u32;
                     list.Count(&mut n)?;
@@ -547,7 +587,7 @@ impl Panel {
                         while it.HasCurrent(&mut has).is_ok() && has.as_bool() {
                             if let Ok(f) = it.GetCurrent() {
                                 if let Some(top) = top_frame_id(f) {
-                                    let e = map.entry(top).or_default();
+                                    let e = map.entry((browser, top)).or_default();
                                     if !e.contains(&(pid as u32)) {
                                         e.push(pid as u32);
                                     }
@@ -559,7 +599,11 @@ impl Panel {
                         }
                     }
                 }
-                *out.borrow_mut() = map;
+                // this browser's entries are replaced, the others kept
+                let mut all = out.borrow_mut();
+                all.retain(|(b, _), _| *b != browser);
+                all.extend(map);
+                drop(all);
                 ready();
                 Ok(())
             }));

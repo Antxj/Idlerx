@@ -12,6 +12,7 @@ mod metrics;
 mod panels;
 mod single;
 mod update;
+mod vpn;
 
 use eframe::egui;
 use std::time::Duration;
@@ -19,8 +20,16 @@ use std::time::Duration;
 const ICON_RGBA: &[u8] = include_bytes!("../assets/icon_64.rgba");
 
 fn main() -> eframe::Result<()> {
-    // after "Update now", the previous version opens this one passing its PID
     let args: Vec<String> = std::env::args().collect();
+    // elevated helper (UAC): authorizes the user for the OpenVPN service
+    if let Some(user) = args
+        .iter()
+        .position(|a| a == vpn::service::ARG_AUTHORIZE)
+        .and_then(|i| args.get(i + 1))
+    {
+        std::process::exit(vpn::service::add_to_group(user));
+    }
+    // after "Update now", the previous version opens this one passing its PID
     if let Some(pid) = args
         .iter()
         .position(|a| a == update::ARG_AFTER_UPDATE)

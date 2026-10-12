@@ -9,12 +9,13 @@
 //! - `toolbar`: navigation, address, zoom, sound, layout and grid shape
 //! - `grid`: one account or the grid, placeholders, cell headers
 //! - `dialogs`: account, group, settings, update, confirmations
+//! - `network`: VPN of groups (tunnels, waiting accounts, group dialog part)
 //! - `widgets`: colors, avatar, text, tooltips, small drawings
 
 use crate::config::{self, Account, Config, Group, Layout, Theme};
 use crate::metrics::{self, Metrics};
 use crate::panels::{self, Hotkey, Panel};
-use crate::{i18n, update};
+use crate::{i18n, update, vpn};
 use eframe::egui::{
     self, text::LayoutJob, Align, Align2, Color32, CornerRadius, FontId, Key, Margin, Pos2, Rect,
     RichText, Sense, Stroke, StrokeKind, TextFormat, Vec2,
@@ -23,10 +24,12 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod dialogs;
 mod grid;
+mod network;
 mod sidebar;
 mod toolbar;
 mod widgets;
@@ -100,6 +103,9 @@ enum Action {
     PauseGroup(String),
     /// Grid shows only this group (None = all accounts).
     GridGroup(Option<String>),
+    /// Connects a group's VPN again (after a failure).
+    RetryVpn(String),
+    InstallOpenVpn,
     /// Shows only this account (Tabs layout).
     Expand(String),
     NewAccount,
@@ -119,6 +125,8 @@ struct GroupEdit {
     name: String,
     /// Account that goes into the new group.
     assign: Option<String>,
+    vpn: network::VpnEdit,
+    error: Option<String>,
 }
 
 enum Dialog {
@@ -156,7 +164,7 @@ pub struct App {
     /// Theme last applied to the pages (setting, dark).
     page_theme: Option<(Theme, bool)>,
     /// Economy mode: main frame id -> page processes.
-    renderers: Rc<RefCell<HashMap<u32, Vec<u32>>>>,
+    renderers: Rc<RefCell<panels::Renderers>>,
     metrics: Metrics,
     runtime: Result<String, String>,
     /// Address bar text and the account it belongs to.
@@ -172,6 +180,14 @@ pub struct App {
     changed_at: Instant,
     closing: bool,
     window_title: String,
+    /// VPN of each group (and its gate).
+    tunnels: vpn::Tunnels,
+    /// Last tunnel "epoch" seen per group (a new one = it came back).
+    vpn_epochs: HashMap<String, u64>,
+    installing: Option<network::Install>,
+    install_result: Option<Result<bool, String>>,
+    /// Accounts reopened with another network: attempts and when to try.
+    retry_open: HashMap<String, (u8, Instant)>,
 }
 
 impl App {
@@ -205,11 +221,23 @@ impl App {
         }
 
         let (economy, keep_active) = (cfg.economy, cfg.keep_active);
+        let repaint = ctx.clone();
+        let tunnels = vpn::Tunnels::new(Arc::new(move || repaint.request_repaint()));
         let screenshot = std::env::var("IDLERX_SCREENSHOT")
             .ok()
             .filter(|v| !v.is_empty());
         let dialog = match screenshot.as_deref() {
             Some("settings") => Some(Dialog::Settings),
+            // the first group's dialog, with its VPN
+            Some("group") => cfg.groups.first().map(|g| {
+                Dialog::Group(GroupEdit {
+                    id: Some(g.id.clone()),
+                    name: g.name.clone(),
+                    assign: None,
+                    vpn: network::VpnEdit::of(Some(g)),
+                    error: None,
+                })
+            }),
             _ => None,
         };
         App {
@@ -241,6 +269,11 @@ impl App {
             changed_at: Instant::now(),
             closing: false,
             window_title: String::new(),
+            tunnels,
+            vpn_epochs: HashMap::new(),
+            installing: None,
+            install_result: None,
+            retry_open: HashMap::new(),
         }
     }
 
@@ -309,32 +342,61 @@ impl App {
             match result {
                 Ok(p) if self.cfg.account(&id).is_some() => {
                     p.set_theme(self.cfg.theme, Self::dark(ctx));
+                    self.retry_open.remove(&id);
                     self.panels.insert(id, p);
                 }
                 Ok(_) => {} // removed meanwhile: the page is closed here
-                Err(e) => {
-                    self.failed.insert(id, e);
-                }
+                Err(e) => match self.retry_open.get_mut(&id) {
+                    // reopened with another network: the previous browser
+                    // may still be letting its folder go
+                    Some((n, at)) if *n < 8 => {
+                        *n += 1;
+                        *at = Instant::now() + Duration::from_secs(1);
+                        self.queue.push_back(id);
+                    }
+                    _ => {
+                        self.retry_open.remove(&id);
+                        self.failed.insert(id, e);
+                    }
+                },
             }
             ctx.request_repaint();
         }
 
-        let Some(id) = self.queue.front().cloned() else {
+        // the first account that can open now: accounts of a group with a
+        // VPN wait for it, without holding the others back
+        let now = Instant::now();
+        let ready = self.queue.iter().find(|id| {
+            self.network_ready(id)
+                && self
+                    .retry_open
+                    .get(id.as_str())
+                    .is_none_or(|(_, at)| *at <= now)
+        });
+        let Some(id) = ready.cloned() else {
+            if !self.retry_open.is_empty() {
+                ctx.request_repaint_after(Duration::from_millis(300));
+            }
             return;
         };
         match self.cfg.account(&id).cloned() {
             Some(acc) if !self.panels.contains_key(&id) => {
+                let gate = self.vpn_gate(&id);
                 let repaint = ctx.clone();
                 let wake: panels::Wake = Rc::new(move || repaint.request_repaint());
-                let slot = panels::open(
-                    self.hwnd,
-                    &acc,
-                    if self.economy {
+                let browser = panels::Browser {
+                    keep_active: if self.economy {
                         self.keep_active
                     } else {
                         self.cfg.keep_active
                     },
-                    self.economy,
+                    economy: self.economy,
+                    vpn: gate.as_ref().map(|(g, port)| (g.as_str(), *port)),
+                };
+                let slot = panels::open(
+                    self.hwnd,
+                    &acc,
+                    browser,
                     self.cfg.save_passwords,
                     Self::dark(ctx),
                     wake,
@@ -342,7 +404,7 @@ impl App {
                 self.starting = Some((id, slot));
             }
             _ => {
-                self.queue.pop_front();
+                self.queue.retain(|q| q != &id);
                 ctx.request_repaint();
             }
         }
@@ -403,7 +465,11 @@ impl App {
             Action::AskClear(id) => self.dialog = Some(Dialog::ConfirmClear(id)),
             Action::AskRemove(id) => self.dialog = Some(Dialog::ConfirmRemove(id)),
             Action::MoveTo(id, target) => {
+                let before = self.vpn_of(&id);
                 self.cfg.move_to(&id, &target);
+                if self.vpn_of(&id) != before {
+                    self.restart_account(&id);
+                }
                 if let Some(a) = self.cfg.account_mut(&id) {
                     a.in_grid = true;
                 }
@@ -412,10 +478,15 @@ impl App {
                 self.mark_dirty();
             }
             Action::Reorder(id, target) => {
+                let before = self.vpn_of(&id);
                 self.cfg.move_to(&id, &target);
+                if self.vpn_of(&id) != before {
+                    self.restart_account(&id);
+                }
                 self.mark_dirty();
             }
             Action::PlaceAfter(id, after) => {
+                let before = self.vpn_of(&id);
                 match &after {
                     Some(t) => self.cfg.move_after(&id, t),
                     None => {
@@ -428,12 +499,19 @@ impl App {
                 if let Some(a) = self.cfg.account_mut(&id) {
                     a.in_grid = true;
                 }
+                if self.vpn_of(&id) != before {
+                    self.restart_account(&id);
+                }
                 self.request_open(&id);
                 self.cfg.selected = Some(id);
                 self.mark_dirty();
             }
             Action::MoveToGroup(id, group) => {
+                let before = self.vpn_of(&id);
                 self.cfg.move_to_group(&id, group.as_deref());
+                if self.vpn_of(&id) != before {
+                    self.restart_account(&id);
+                }
                 self.mark_dirty();
             }
             Action::NewGroup(assign) => {
@@ -441,6 +519,8 @@ impl App {
                     id: None,
                     name: String::new(),
                     assign,
+                    vpn: network::VpnEdit::default(),
+                    error: None,
                 }))
             }
             Action::RenameGroup(gid) => {
@@ -449,13 +529,33 @@ impl App {
                         id: Some(gid.clone()),
                         name: g.name.clone(),
                         assign: None,
+                        vpn: network::VpnEdit::of(Some(g)),
+                        error: None,
                     }));
                 }
             }
             Action::DeleteGroup(gid) => {
+                let had_vpn = self
+                    .cfg
+                    .group(&gid)
+                    .is_some_and(|g| g.active_vpn().is_some());
+                let ids = self.cfg.accounts_in(Some(&gid));
                 self.cfg.delete_group(&gid);
+                self.forget_group_vpn(&gid);
+                if had_vpn {
+                    // its accounts leave the VPN
+                    for id in ids {
+                        self.restart_account(&id);
+                    }
+                }
                 self.mark_dirty();
             }
+            Action::RetryVpn(gid) => {
+                if let Some(v) = self.cfg.group(&gid).and_then(|g| g.active_vpn()).cloned() {
+                    self.tunnels.retry(&gid, &v);
+                }
+            }
+            Action::InstallOpenVpn => self.install_openvpn(),
             Action::ToggleCollapse(gid) => {
                 if let Some(g) = self.cfg.group_mut(&gid) {
                     g.collapsed = !g.collapsed;
@@ -573,17 +673,21 @@ impl App {
         self.audio.clear();
         if self.economy {
             // which page processes belong to each account (answer arrives
-            // asynchronously and is used on the next round)
-            if let Some(p) = self.panels.values().next() {
-                let repaint = ctx.clone();
-                p.request_renderers(self.renderers.clone(), move || repaint.request_repaint());
+            // asynchronously and is used on the next round), asked once per
+            // shared browser (groups with a VPN have their own)
+            let mut asked = HashSet::new();
+            for p in self.panels.values() {
+                if asked.insert(p.pid) {
+                    let repaint = ctx.clone();
+                    p.request_renderers(self.renderers.clone(), move || repaint.request_repaint());
+                }
             }
         }
         let renderers = self.renderers.borrow().clone();
         for (id, p) in &self.panels {
             let roots = if self.economy {
                 p.main_frame_id()
-                    .and_then(|f| renderers.get(&f).cloned())
+                    .and_then(|f| renderers.get(&(p.pid, f)).cloned())
                     .unwrap_or_default()
             } else {
                 vec![p.pid]
@@ -764,6 +868,7 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.register_window(frame);
         self.after_update_check(ctx);
+        self.sync_vpn();
         self.open_next(ctx);
         self.poll(ctx);
         self.show_window(ctx);
