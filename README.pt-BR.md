@@ -52,7 +52,8 @@ próprio progresso.</sub>
 - **Grupos** na lista: **clique num grupo para mostrar só as contas dele na
   grade** (de novo: todas), a seta recolhe/expande, arraste grupos para
   mudar a ordem, arraste contas para dentro, abra ou pause o grupo inteiro
-  de uma vez
+  de uma vez. Uma conta nova já pode nascer num grupo (no diálogo de nova
+  conta, ou botão direito no grupo › Nova conta neste grupo)
 - **VPN por grupo** (OpenVPN): escolha um arquivo `.ovpn` no grupo e as
   contas dele só acessam a internet pela VPN, com **kill switch**: se a VPN
   cair, elas ficam sem internet até ela voltar, nunca pela sua conexão. O
@@ -203,7 +204,7 @@ Variáveis úteis para testes:
 | `IDLERX_INSTANCE` | separa uma instância de teste do app de uso diário |
 | `IDLERX_LANGUAGE` | força `pt` ou `en` |
 | `IDLERX_UPDATE_URL` | consulta outro endereço em vez da API do GitHub |
-| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu` ou `group` |
+| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu`, `group` ou `new-account` |
 
 ## Onde ficam os dados
 

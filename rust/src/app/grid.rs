@@ -76,7 +76,7 @@ impl App {
                     )
                     .clicked()
                 {
-                    actions.push(Action::NewAccount);
+                    actions.push(Action::NewAccount(None));
                 }
             });
             return;

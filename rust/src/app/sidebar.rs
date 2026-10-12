@@ -17,7 +17,7 @@ impl App {
                 )
                 .fill(ACCENT);
                 if ui.add(b).side_tip("Ctrl+N").clicked() {
-                    actions.push(Action::NewAccount);
+                    actions.push(Action::NewAccount(None));
                 }
             });
         });
@@ -698,6 +698,16 @@ impl App {
         );
         let resp = resp.side_tip(tip);
         resp.context_menu(|ui| {
+            if ui
+                .button(tr!(
+                    "+  Nova conta neste grupo",
+                    "+  New account in this group"
+                ))
+                .clicked()
+            {
+                actions.push(Action::NewAccount(Some(g.id.clone())));
+            }
+            ui.separator();
             if ui.button(tr!("▶  Abrir todas", "▶  Open all")).clicked() {
                 actions.push(Action::OpenGroup(g.id.clone()));
             }

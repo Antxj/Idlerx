@@ -12,7 +12,14 @@ impl App {
         let mut keep = true;
         let dialog = match dialog {
             Dialog::Edit(mut st) => {
+                let groups: Vec<(String, String)> = self
+                    .cfg
+                    .groups
+                    .iter()
+                    .map(|g| (g.id.clone(), g.name.clone()))
+                    .collect();
                 let modal = egui::Modal::new(egui::Id::new("edit")).show(ctx, |ui| {
+                    let dark = ui.visuals().dark_mode;
                     ui.set_width(420.0);
                     let title = if st.id.is_some() {
                         tr!("Editar conta", "Edit account")
@@ -45,7 +52,34 @@ impl App {
                     );
                     if st.id.is_none() {
                         ui.add_space(6.0);
-                        ui.checkbox(&mut st.open_now, tr!("Abrir agora", "Open now"));
+                        ui.horizontal(|ui| {
+                            ui.checkbox(&mut st.open_now, tr!("Abrir agora", "Open now"));
+                            // the group it goes into (discreet: only when there are groups)
+                            if !groups.is_empty() {
+                                ui.add_space(12.0);
+                                ui.label(RichText::new(tr!("Grupo:", "Group:")).color(weak(dark)));
+                                let none = tr!("Sem grupo", "No group").to_string();
+                                let current = st
+                                    .group
+                                    .as_ref()
+                                    .and_then(|g| groups.iter().find(|(id, _)| id == g))
+                                    .map(|(_, n)| n.clone())
+                                    .unwrap_or_else(|| none.clone());
+                                egui::ComboBox::from_id_salt("new_account_group")
+                                    .selected_text(current)
+                                    .width(160.0)
+                                    .show_ui(ui, |ui| {
+                                        ui.selectable_value(&mut st.group, None, none);
+                                        for (id, name) in &groups {
+                                            ui.selectable_value(
+                                                &mut st.group,
+                                                Some(id.clone()),
+                                                name,
+                                            );
+                                        }
+                                    });
+                            }
+                        });
                     }
                     if let Some(e) = &st.error {
                         ui.add_space(4.0);
@@ -305,7 +339,12 @@ impl App {
                 }
             }
             None => {
-                let a = Account::new(name, url);
+                let mut a = Account::new(name, url);
+                a.group = st.group.clone().filter(|g| self.cfg.group(g).is_some());
+                // a collapsed group opens to show its new account
+                if let Some(g) = a.group.clone().and_then(|g| self.cfg.group_mut(&g)) {
+                    g.collapsed = false;
+                }
                 let id = a.id.clone();
                 self.cfg.accounts.push(a);
                 if st.open_now {

@@ -51,7 +51,9 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
 - **Groups** in the side list: **click a group to show only its accounts
   in the grid** (click again for all of them), the arrow collapses/expands,
   drag groups to reorder them, drag accounts into them, open or pause a
-  whole group at once
+  whole group at once. A new account can go straight into a group (in the
+  new account dialog, or right click on the group › New account in this
+  group)
 - **VPN per group** (OpenVPN): choose a `.ovpn` file for a group and its
   accounts reach the internet only through the VPN, with a **kill switch**:
   if the VPN drops, they stay offline until it is back, never through your
@@ -205,7 +207,7 @@ Useful variables for testing:
 | `IDLERX_INSTANCE` | separates a test instance from the everyday app |
 | `IDLERX_LANGUAGE` | forces `pt` or `en` |
 | `IDLERX_UPDATE_URL` | queries another address instead of the GitHub API |
-| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings`, `grid-menu` or `group` |
+| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings`, `grid-menu`, `group` or `new-account` |
 
 ## Where the data lives
 

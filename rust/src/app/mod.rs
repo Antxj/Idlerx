@@ -108,7 +108,8 @@ enum Action {
     InstallOpenVpn,
     /// Shows only this account (Tabs layout).
     Expand(String),
-    NewAccount,
+    /// New account dialog, already in a group (or none).
+    NewAccount(Option<String>),
 }
 
 struct EditState {
@@ -116,6 +117,8 @@ struct EditState {
     name: String,
     url: String,
     open_now: bool,
+    /// Group of a new account (None = no group).
+    group: Option<String>,
     error: Option<String>,
 }
 
@@ -228,6 +231,15 @@ impl App {
             .filter(|v| !v.is_empty());
         let dialog = match screenshot.as_deref() {
             Some("settings") => Some(Dialog::Settings),
+            // new account, already in the first group
+            Some("new-account") => Some(Dialog::Edit(EditState {
+                id: None,
+                name: String::new(),
+                url: String::new(),
+                open_now: true,
+                group: cfg.groups.first().map(|g| g.id.clone()),
+                error: None,
+            })),
             // the first group's dialog, with its VPN
             Some("group") => cfg.groups.first().map(|g| {
                 Dialog::Group(GroupEdit {
@@ -458,6 +470,7 @@ impl App {
                         name: a.name.clone(),
                         url: a.url.clone(),
                         open_now: false,
+                        group: None,
                         error: None,
                     }));
                 }
@@ -596,12 +609,13 @@ impl App {
                 self.cfg.selected = Some(id);
                 self.mark_dirty();
             }
-            Action::NewAccount => {
+            Action::NewAccount(group) => {
                 self.dialog = Some(Dialog::Edit(EditState {
                     id: None,
                     name: String::new(),
                     url: String::new(),
                     open_now: true,
+                    group,
                     error: None,
                 }))
             }
@@ -733,7 +747,7 @@ impl App {
             self.focus_mode = false;
         }
         if new && self.dialog.is_none() {
-            self.apply(Action::NewAccount);
+            self.apply(Action::NewAccount(None));
         }
     }
 
