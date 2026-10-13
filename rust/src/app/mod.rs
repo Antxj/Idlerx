@@ -203,6 +203,8 @@ pub struct App {
     /// account), and since when a page is not responding.
     recoveries: HashMap<String, Vec<Instant>>,
     unresponsive: HashMap<String, Instant>,
+    /// IDLERX_SCREENSHOT=pointer:x,y,right: the right click was sent.
+    pointer_clicked: bool,
 }
 
 impl App {
@@ -307,6 +309,7 @@ impl App {
             update_told: false,
             recoveries: HashMap::new(),
             unresponsive: HashMap::new(),
+            pointer_clicked: false,
         }
     }
 
@@ -1075,15 +1078,32 @@ impl eframe::App for App {
     /// IDLERX_SCREENSHOT=pointer:x,y keeps the pointer at that spot (in
     /// points), to picture hover states.
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
-        let at = self
+        // "pointer:x,y" or "pointer:x,y,right" (a right click there too)
+        let spec = self
             .screenshot
             .as_deref()
-            .and_then(|s| s.strip_prefix("pointer:"))
-            .and_then(|p| p.split_once(','))
-            .and_then(|(x, y)| Some(Pos2::new(x.parse().ok()?, y.parse().ok()?)));
+            .and_then(|s| s.strip_prefix("pointer:"));
+        let mut parts = spec.into_iter().flat_map(|p| p.split(','));
+        let x = parts.next().and_then(|v| v.parse().ok());
+        let y = parts.next().and_then(|v| v.parse().ok());
+        let right = parts.next() == Some("right");
+        let Some(pos) = x.zip(y).map(|(x, y)| Pos2::new(x, y)) else {
+            return;
+        };
         // placed for a while, then left still: tooltips show up too
-        if let Some(pos) = at.filter(|_| self.created.elapsed() < Duration::from_secs(10)) {
+        if self.created.elapsed() < Duration::from_secs(10) {
             raw.events.push(egui::Event::PointerMoved(pos));
+        }
+        if right && !self.pointer_clicked && self.created.elapsed() > Duration::from_secs(10) {
+            self.pointer_clicked = true;
+            for pressed in [true, false] {
+                raw.events.push(egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Secondary,
+                    pressed,
+                    modifiers: Default::default(),
+                });
+            }
         }
     }
 

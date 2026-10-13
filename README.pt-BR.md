@@ -217,7 +217,7 @@ Variáveis úteis para testes:
 | `IDLERX_INSTANCE` | separa uma instância de teste do app de uso diário |
 | `IDLERX_LANGUAGE` | força `pt` ou `en` |
 | `IDLERX_UPDATE_URL` | consulta outro endereço em vez da API do GitHub |
-| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu`, `group`, `new-account` ou `pointer:x,y` (ponteiro parado ali) |
+| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu`, `group`, `new-account` ou `pointer:x,y` (ponteiro parado ali; `pointer:x,y,right` também clica com o botão direito) |
 
 ## Onde ficam os dados
 

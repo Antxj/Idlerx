@@ -372,7 +372,7 @@ impl App {
         }
 
         let resp = resp.side_tip(&a.url);
-        resp.context_menu(|ui| self.account_menu(ui, a, open, actions));
+        side_menu(&resp, |ui| self.account_menu(ui, a, open, actions));
     }
 
     pub(super) fn account_menu(
@@ -697,7 +697,7 @@ impl App {
             metrics::fmt_memory(mem)
         );
         let resp = resp.side_tip(tip);
-        resp.context_menu(|ui| {
+        side_menu(&resp, |ui| {
             if ui
                 .button(tr!(
                     "+  Nova conta neste grupo",

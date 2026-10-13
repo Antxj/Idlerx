@@ -47,6 +47,19 @@ impl SideTip for egui::Response {
     }
 }
 
+/// Right-click menu of a side list row, opened right below the row and
+/// inside the list: a menu over a page would hide that page while open (the
+/// pages are native windows that would cover it).
+pub(super) fn side_menu(resp: &egui::Response, add_contents: impl FnOnce(&mut egui::Ui)) {
+    let band = Rect::from_x_y_ranges(6.0..=SIDEBAR_WIDTH - 6.0, resp.rect.y_range());
+    egui::Popup::context_menu(resp)
+        .anchor(band)
+        .align(egui::RectAlign::BOTTOM_START)
+        .align_alternatives(&[egui::RectAlign::TOP_START])
+        .width(SIDEBAR_WIDTH - 36.0)
+        .show(add_contents);
+}
+
 /// Tooltips of the top bar and of the grid cell headers: shown beside the
 /// button, inside the bar, instead of below it (where a page would cover them).
 pub(super) trait BarTip {
