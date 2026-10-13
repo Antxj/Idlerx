@@ -23,7 +23,9 @@
   const nativeSetTimeout = window.setTimeout.bind(window);
   const nativeClearTimeout = window.clearTimeout.bind(window);
   const nativeSetInterval = window.setInterval.bind(window);
-  const st = { fps: 0, awake: true, next: 0, nextHidden: 0, seq: 1e9, rate: -1 };
+  const st = { fps: 0, awake: true, next: 0, frameT: -1, nextHidden: 0, seq: 1e9, rate: -1 };
+  /** Time between screen refreshes (ms), learned from the frames seen. */
+  let vsync = 0;
   /** handle -> { cb, timer, frame } of every callback still waiting */
   const pending = new Map();
 
@@ -81,15 +83,32 @@
       e.frame = nativeRaf((t) => { e.frame = 0; run(h, e, t); });
       return;
     }
-    const wait = Math.max(0, st.next - performance.now());
+    // Limited: sleeps on a timer until shortly before the frame is due,
+    // then follows the screen's own frames until it is. The schedule lives
+    // in frame time and advances by whole intervals, so the limit lands
+    // on screen refreshes (60 on a 180 Hz screen = every 3rd one) instead
+    // of drifting above or below it.
+    const interval = 1000 / st.fps;
+    const wait = Math.max(0, st.next - performance.now() - (vsync || 8));
     e.timer = nativeSetTimeout(() => {
       e.timer = 0;
-      e.frame = nativeRaf((t) => {
+      let prev = 0;
+      const onFrame = (t) => {
         e.frame = 0;
-        const now = performance.now();
-        if (now >= st.next) st.next = now + 1000 / st.fps;
+        if (prev && t > prev) vsync = vsync ? Math.min(vsync * 1.001, t - prev) : t - prev;
+        prev = t;
+        // other callbacks of a frame that was let through run in it too
+        if (t !== st.frameT) {
+          if (t < st.next - (vsync ? vsync / 2 : 2)) {
+            e.frame = nativeRaf(onFrame);
+            return;
+          }
+          st.frameT = t;
+          st.next = t - st.next > interval ? t + interval : st.next + interval;
+        }
         run(h, e, t);
-      });
+      };
+      e.frame = nativeRaf(onFrame);
     }, wait);
   };
 
