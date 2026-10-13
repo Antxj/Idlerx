@@ -348,7 +348,7 @@ impl App {
                 }
                 Phase::Stopped => tr!("desligada", "off").into(),
             };
-            lines.push(format!("🛡 {name}: VPN {state}"));
+            lines.push(format!("{name}: VPN {state}"));
             // down: it was up and dropped, or it cannot connect
             let down = match &s.phase {
                 Phase::Reconnecting => true,
