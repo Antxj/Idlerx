@@ -83,6 +83,10 @@ impl App {
         if !self.is_open_or_opening(id) {
             return;
         }
+        self.note(
+            id,
+            "reabrindo: a rede da conta mudou (VPN ligada, desligada ou outro grupo)",
+        );
         self.close_panel(id);
         self.request_open(id);
         // the old browser takes a moment to let its folder go
@@ -120,6 +124,7 @@ impl App {
                 for id in self.cfg.accounts_in(Some(gid)) {
                     if let Some(p) = self.panels.get(&id) {
                         p.reload();
+                        self.note(&id, "recarregada: a VPN do grupo voltou depois de cair");
                     }
                 }
             }

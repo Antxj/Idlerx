@@ -65,6 +65,9 @@ impl App {
             if nav(ui, "⟳", tr!("Recarregar", "Reload"), p.is_some()) {
                 if let Some(p) = p {
                     p.reload();
+                    if let Some(a) = self.selected_account() {
+                        crate::events::log(&a.name, "recarregada: botão ⟳ da barra");
+                    }
                 }
             }
 

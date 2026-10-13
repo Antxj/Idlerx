@@ -222,6 +222,8 @@ Useful variables for testing:
 ## Where the data lives
 
 - Settings and account list: `%APPDATA%\Idlerx\config.json`
+- Pages log: `%APPDATA%\Idlerx\logs\pages.log` (when each account loaded,
+  reloaded and why, was hidden or shown; **Settings** › Pages log)
 - Browser profiles (cookies, cache, logins) of each account:
   `%LOCALAPPDATA%\Idlerx\profiles\`
 - Group VPN: `%APPDATA%\Idlerx\vpn\` (a copy of each `.ovpn`, passwords

@@ -241,6 +241,8 @@ pub struct Panel {
     /// "Keep awake" last sent with the frame limit.
     awake_sent: Cell<Option<bool>>,
     failure: Rc<Cell<Option<Failure>>>,
+    /// A new document started loading since the last call.
+    loaded: Rc<Cell<bool>>,
 }
 
 impl Drop for Panel {
@@ -317,10 +319,12 @@ impl Panel {
                 })),
             );
             let fps_resend = Rc::new(Cell::new(true));
-            let r = fps_resend.clone();
+            let loaded = Rc::new(Cell::new(false));
+            let (r, l) = (fps_resend.clone(), loaded.clone());
             let w = wake.clone();
             let loading = ContentLoadingEventHandler::create(Box::new(move |_, _| {
                 r.set(true);
+                l.set(true);
                 w();
                 Ok(())
             }));
@@ -377,6 +381,7 @@ impl Panel {
                 fps_rate: Rc::new(Cell::new(None)),
                 awake_sent: Cell::new(None),
                 failure,
+                loaded,
             };
             p.set_save_passwords(save_passwords);
             p.set_muted(account.muted);
@@ -390,7 +395,8 @@ impl Panel {
 
     /// Puts the page on `rect` (logical points of the main window), or hides
     /// it with None. Only calls WebView2 when something changed.
-    pub fn place(&mut self, rect: Option<egui::Rect>, pixels_per_point: f32) {
+    /// Returns the new visibility when it changed.
+    pub fn place(&mut self, rect: Option<egui::Rect>, pixels_per_point: f32) -> Option<bool> {
         match rect {
             Some(r) if r.width() >= 1.0 && r.height() >= 1.0 => {
                 let b = (
@@ -413,7 +419,9 @@ impl Panel {
                     self.visible = true;
                     let _ = unsafe { self.controller.SetIsVisible(true) };
                     self.memory_level(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL);
+                    return Some(true);
                 }
+                None
             }
             _ => {
                 if self.visible {
@@ -422,7 +430,9 @@ impl Panel {
                     // memory (the page keeps running)
                     let _ = unsafe { self.controller.SetIsVisible(false) };
                     self.memory_level(COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW);
+                    return Some(false);
                 }
+                None
             }
         }
     }
@@ -670,6 +680,12 @@ impl Panel {
 
     pub fn take_hotkey(&self) -> Option<Hotkey> {
         self.hotkey.take()
+    }
+
+    /// A new document started loading since the last call (first load,
+    /// reload, navigation).
+    pub fn take_loaded(&self) -> bool {
+        self.loaded.take()
     }
 
     /// A process of the page failed since the last call.

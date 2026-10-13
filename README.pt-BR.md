@@ -222,6 +222,9 @@ Variáveis úteis para testes:
 ## Onde ficam os dados
 
 - Configurações e lista de contas: `%APPDATA%\Idlerx\config.json`
+- Registro das páginas: `%APPDATA%\Idlerx\logs\pages.log` (quando cada
+  conta carregou, recarregou e por quê, ficou escondida ou visível;
+  **Configurações** › Registro das páginas)
 - Perfis do navegador (cookies, cache, logins) de cada conta:
   `%LOCALAPPDATA%\Idlerx\profiles\`
 - VPN dos grupos: `%APPDATA%\Idlerx\vpn\` (cópia de cada `.ovpn`,

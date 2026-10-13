@@ -1,6 +1,6 @@
 [package]
 name = "idlerx"
-version = "0.6.2"
+version = "0.6.3"
 edition = "2021"
 description = "Several isolated browser sessions (accounts) side by side in a single window"
 license = "GPL-3.0-or-later"
@@ -25,7 +25,7 @@ hmac = "0.13"
 sha1 = "0.11"
 base32 = "0.5"
 rfd = "0.17"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust", "Win32_System_Threading", "Win32_Globalization", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Networking_WinSock", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_NetworkManagement_NetManagement"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Globalization", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Networking_WinSock", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_NetworkManagement_NetManagement"] }
 tray-icon = "0.26"
 
 [build-dependencies]

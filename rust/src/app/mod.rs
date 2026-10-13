@@ -15,7 +15,7 @@
 use crate::config::{self, Account, Config, Group, Layout, Theme};
 use crate::metrics::{self, Metrics};
 use crate::panels::{self, Failure, Hotkey, Panel};
-use crate::{i18n, tray, update, vpn};
+use crate::{events, i18n, tray, update, vpn};
 use eframe::egui::{
     self, text::LayoutJob, Align, Align2, Color32, CornerRadius, FontId, Key, Margin, Pos2, Rect,
     RichText, Sense, Stroke, StrokeKind, TextFormat, Vec2,
@@ -327,7 +327,16 @@ impl App {
 
     // ---------------------------------------------------------- accounts --
 
+    /// A line in the pages log (logs\pages.log), under the account's name.
+    fn note(&self, id: &str, what: &str) {
+        let name = self.cfg.account(id).map(|a| a.name.as_str()).unwrap_or(id);
+        events::log(name, what);
+    }
+
     fn request_open(&mut self, id: &str) {
+        if !self.is_open_or_opening(id) {
+            self.note(id, "abrindo");
+        }
         let Some(a) = self.cfg.account_mut(id) else {
             return;
         };
@@ -342,6 +351,9 @@ impl App {
     }
 
     fn close_panel(&mut self, id: &str) {
+        if self.is_open_or_opening(id) {
+            self.note(id, "fechada (pausada)");
+        }
         self.panels.remove(id);
         self.queue.retain(|q| q != id);
         if self.starting.as_ref().is_some_and(|(s, _)| s == id) {
@@ -482,6 +494,7 @@ impl App {
             Action::Reload(id) => {
                 if let Some(p) = self.panels.get(&id) {
                     p.reload();
+                    self.note(&id, "recarregada: botão ⟳ (cabeçalho ou barra)");
                 }
             }
             Action::Edit(id) => {
@@ -680,6 +693,7 @@ impl App {
         let mut focused = None;
         let mut hotkeys = Vec::new();
         let mut failures = Vec::new();
+        let mut loads = Vec::new();
         for (id, p) in &self.panels {
             if p.take_got_focus() {
                 focused = Some(id.clone());
@@ -690,6 +704,12 @@ impl App {
             if let Some(f) = p.take_failure() {
                 failures.push((id.clone(), f));
             }
+            if p.take_loaded() {
+                loads.push((id.clone(), p.url().unwrap_or_default()));
+            }
+        }
+        for (id, url) in loads {
+            self.note(&id, &format!("documento carregando: {url}"));
         }
         for (id, f) in failures {
             self.recover(&id, f);
@@ -777,18 +797,31 @@ impl App {
             }
         }
         self.unresponsive.remove(id);
+        let what = match failure {
+            Failure::BrowserGone => "o navegador da conta fechou",
+            Failure::PageCrashed => "o processo da página caiu",
+            Failure::Unresponsive => "a página ficou 30 s sem responder",
+        };
         let times = self.recoveries.entry(id.to_string()).or_default();
         times.retain(|t| t.elapsed() < WINDOW);
         if times.len() >= 3 {
+            self.note(
+                id,
+                &format!("{what}; já recuperada 3 vezes em 10 min, deixada assim"),
+            );
             return;
         }
         times.push(Instant::now());
         match failure {
-            Failure::BrowserGone => self.restart_account(id),
+            Failure::BrowserGone => {
+                self.note(id, &format!("{what}: reabrindo a conta"));
+                self.restart_account(id);
+            }
             Failure::PageCrashed | Failure::Unresponsive => {
                 if let Some(p) = self.panels.get(id) {
                     p.reload();
                 }
+                self.note(id, &format!("{what}: recarregada"));
             }
         }
     }
@@ -1069,8 +1102,19 @@ impl eframe::App for App {
         // games keep running); ui() places them again when restored
         let minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
         if minimized {
-            for p in self.panels.values_mut() {
-                p.place(None, 1.0);
+            let mut hidden = Vec::new();
+            for (id, p) in self.panels.iter_mut() {
+                if p.place(None, 1.0).is_some() {
+                    hidden.push(id.clone());
+                }
+            }
+            let why = if self.in_tray {
+                "escondida: janela na bandeja"
+            } else {
+                "escondida: janela minimizada"
+            };
+            for id in hidden {
+                self.note(&id, why);
             }
             ctx.request_repaint_after(POLL_HIDDEN);
         }
@@ -1167,12 +1211,26 @@ impl eframe::App for App {
         // drop-down or dialog while it is open
         let overlays = overlay_rects(&ctx);
         let ppp = ctx.pixels_per_point();
+        let mut changes = Vec::new();
         for (id, p) in &mut self.panels {
-            let rect = placements
-                .get(id)
-                .copied()
-                .filter(|r| self.dialog.is_none() && !overlays.iter().any(|o| o.intersects(*r)));
-            p.place(rect, ppp);
+            let spot = placements.get(id).copied();
+            let covered = spot.is_some_and(|r| overlays.iter().any(|o| o.intersects(r)));
+            let rect = spot.filter(|_| self.dialog.is_none() && !covered);
+            if let Some(visible) = p.place(rect, ppp) {
+                let why = if visible {
+                    "visível"
+                } else if spot.is_none() {
+                    "escondida: fora da tela (outra conta ou grupo em exibição)"
+                } else if self.dialog.is_some() {
+                    "escondida: diálogo aberto"
+                } else {
+                    "escondida: menu ou lista aberta por cima"
+                };
+                changes.push((id.clone(), why));
+            }
+        }
+        for (id, why) in changes {
+            self.note(&id, why);
         }
 
         // a click outside the pages gives the keyboard back to egui

@@ -638,6 +638,20 @@ impl App {
                     let _ = std::fs::create_dir_all(&dir);
                     let _ = open::that(dir);
                 }
+                if ui
+                    .button(tr!("Registro das páginas", "Pages log"))
+                    .on_hover_text(tr!(
+                        "Quando cada conta carregou, recarregou (e por quê), ficou escondida ou visível.",
+                        "When each account loaded, reloaded (and why), was hidden or shown."
+                    ))
+                    .clicked()
+                {
+                    let file = config::data_dir().join("logs").join("pages.log");
+                    if !file.exists() {
+                        crate::events::log("Idlerx", "registro iniciado");
+                    }
+                    let _ = open::that(file);
+                }
             });
 
             ui.add_space(12.0);

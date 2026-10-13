@@ -8,6 +8,7 @@
 mod i18n;
 mod app;
 mod config;
+mod events;
 mod metrics;
 mod panels;
 mod single;
