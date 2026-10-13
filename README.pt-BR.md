@@ -107,8 +107,14 @@ próprio progresso.</sub>
   menos memória**, mas o jogo continua rodando. Minimizado, o Idlerx gasta
   cerca de dez vezes menos CPU
 - "Manter os jogos ativos em segundo plano" (ligado por padrão) impede o
-  navegador de desacelerar os timers de páginas escondidas: jogos idle
-  continuam progredindo. Desligue para economizar ainda mais CPU
+  navegador de desacelerar os timers de páginas escondidas e mantém os
+  jogos acordados fora da tela: a página escondida acha que continua
+  visível e o loop de desenho dela roda a 5 quadros por segundo, então
+  jogos que rodam a lógica nele (Phaser e a maioria dos jogos em canvas)
+  não congelam nem se pausam sozinhos. Desligue para economizar ainda mais
+  CPU
+- Uma página que trava ou para de responder recarrega sozinha (e a conta
+  abre de novo se o navegador dela fechou), até 3 vezes em 10 minutos
 - A interface só se redesenha quando algo muda (ou 1×/s para os números)
 - **Pausar** contas que você não está usando libera toda a memória delas
 

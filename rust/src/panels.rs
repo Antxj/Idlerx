@@ -26,7 +26,7 @@ use webview2_com::{
     AddScriptToExecuteOnDocumentCreatedCompletedHandler, ContentLoadingEventHandler,
     CoreWebView2EnvironmentOptions, CreateCoreWebView2ControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, ExecuteScriptCompletedHandler,
-    FocusChangedEventHandler, GetProcessExtendedInfosCompletedHandler,
+    FocusChangedEventHandler, GetProcessExtendedInfosCompletedHandler, ProcessFailedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, RECT};
 use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
@@ -82,6 +82,17 @@ pub enum Hotkey {
     Focus,
     /// Esc: leaves focus mode (the page still gets it).
     Escape,
+}
+
+/// A process of the page failed (see [`Panel::take_failure`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Failure {
+    /// The page's process (or one of its frames') ended: the page is blank.
+    PageCrashed,
+    /// The page stopped responding.
+    Unresponsive,
+    /// The browser process ended: the page is gone for good.
+    BrowserGone,
 }
 
 /// Result of [`open`], filled in when the page exists (or failed).
@@ -227,6 +238,9 @@ pub struct Panel {
     /// Frames per second the page actually drew (measured inside it);
     /// None until known or when the page does not animate.
     fps_rate: Rc<Cell<Option<u32>>>,
+    /// "Keep awake" last sent with the frame limit.
+    awake_sent: Cell<Option<bool>>,
+    failure: Rc<Cell<Option<Failure>>>,
 }
 
 impl Drop for Panel {
@@ -311,6 +325,39 @@ impl Panel {
                 Ok(())
             }));
             let _ = webview.add_ContentLoading(&loading, &mut token);
+            // a crashed or stuck page is reported to the app, which reloads
+            // it (or opens the account again when its browser is gone)
+            let failure = Rc::new(Cell::new(None));
+            let fl = failure.clone();
+            let w = wake.clone();
+            let failed = ProcessFailedEventHandler::create(Box::new(move |_, args| {
+                let Some(args) = args else { return Ok(()) };
+                let mut kind = Default::default();
+                args.ProcessFailedKind(&mut kind)?;
+                let f = match kind {
+                    COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED => {
+                        Some(Failure::BrowserGone)
+                    }
+                    COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED
+                    | COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED => {
+                        Some(Failure::PageCrashed)
+                    }
+                    COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE => {
+                        Some(Failure::Unresponsive)
+                    }
+                    // GPU and helper processes come back by themselves
+                    _ => None,
+                };
+                if let Some(f) = f {
+                    // the most serious one wins until the app reads it
+                    if fl.get() != Some(Failure::BrowserGone) {
+                        fl.set(Some(f));
+                    }
+                    w();
+                }
+                Ok(())
+            }));
+            let _ = webview.add_ProcessFailed(&failed, &mut token);
             let _ = controller.add_GotFocus(&focus_handler, &mut token);
             let _ = controller.add_AcceleratorKeyPressed(&key_handler, &mut token);
 
@@ -328,6 +375,8 @@ impl Panel {
                 fps_sent: Cell::new(None),
                 fps_resend,
                 fps_rate: Rc::new(Cell::new(None)),
+                awake_sent: Cell::new(None),
+                failure,
             };
             p.set_save_passwords(save_passwords);
             p.set_muted(account.muted);
@@ -386,12 +435,16 @@ impl Panel {
 
     /// Frames per second the page may draw (0 = no limit). Only talks to
     /// the page when the value changes or a new document loaded.
-    pub fn set_fps(&self, fps: u32) {
-        if !self.fps_resend.replace(false) && self.fps_sent.get() == Some(fps) {
+    /// Frame limit, and `awake`: the game keeps running while the page is
+    /// hidden (see fps.js).
+    pub fn set_fps(&self, fps: u32, awake: bool) {
+        let same = self.fps_sent.get() == Some(fps) && self.awake_sent.get() == Some(awake);
+        if !self.fps_resend.replace(false) && same {
             return;
         }
         self.fps_sent.set(Some(fps));
-        let js = format!("window.__idlerxFps && window.__idlerxFps.set({fps})");
+        self.awake_sent.set(Some(awake));
+        let js = format!("window.__idlerxFps && window.__idlerxFps.set({fps}, {awake})");
         let _ = unsafe {
             self.webview.ExecuteScript(
                 &HSTRING::from(js),
@@ -617,6 +670,11 @@ impl Panel {
 
     pub fn take_hotkey(&self) -> Option<Hotkey> {
         self.hotkey.take()
+    }
+
+    /// A process of the page failed since the last call.
+    pub fn take_failure(&self) -> Option<Failure> {
+        self.failure.take()
     }
 }
 

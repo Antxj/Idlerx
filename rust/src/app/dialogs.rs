@@ -445,9 +445,11 @@ impl App {
             );
             ui.label(
                 RichText::new(tr!(
-                    "Impede o navegador de desacelerar páginas escondidas ou atrás de outras. \
-                     Vale para as contas abertas depois da mudança.",
-                    "Stops the browser from slowing down hidden or covered pages. \
+                    "Impede o navegador de desacelerar páginas escondidas ou atrás de outras, \
+                     e o jogo de uma conta fora da tela continua rodando (a 5 quadros por \
+                     segundo). Vale para as contas abertas depois da mudança.",
+                    "Stops the browser from slowing down hidden or covered pages, and the \
+                     game of an account off screen keeps running (at 5 frames per second). \
                      Applies to accounts opened after the change."
                 ))
                 .small()

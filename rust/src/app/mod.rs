@@ -14,7 +14,7 @@
 
 use crate::config::{self, Account, Config, Group, Layout, Theme};
 use crate::metrics::{self, Metrics};
-use crate::panels::{self, Hotkey, Panel};
+use crate::panels::{self, Failure, Hotkey, Panel};
 use crate::{i18n, tray, update, vpn};
 use eframe::egui::{
     self, text::LayoutJob, Align, Align2, Color32, CornerRadius, FontId, Key, Margin, Pos2, Rect,
@@ -199,6 +199,10 @@ pub struct App {
     vpn_down: HashMap<String, (Instant, bool)>,
     /// A new version was told through a notification.
     update_told: bool,
+    /// Pages reloaded by themselves after a crash (recent times, per
+    /// account), and since when a page is not responding.
+    recoveries: HashMap<String, Vec<Instant>>,
+    unresponsive: HashMap<String, Instant>,
 }
 
 impl App {
@@ -301,6 +305,8 @@ impl App {
             last_tray: Instant::now() - POLL,
             vpn_down: HashMap::new(),
             update_told: false,
+            recoveries: HashMap::new(),
+            unresponsive: HashMap::new(),
         }
     }
 
@@ -673,6 +679,7 @@ impl App {
     fn poll(&mut self, ctx: &egui::Context) {
         let mut focused = None;
         let mut hotkeys = Vec::new();
+        let mut failures = Vec::new();
         for (id, p) in &self.panels {
             if p.take_got_focus() {
                 focused = Some(id.clone());
@@ -680,6 +687,12 @@ impl App {
             if let Some(k) = p.take_hotkey() {
                 hotkeys.push(k);
             }
+            if let Some(f) = p.take_failure() {
+                failures.push((id.clone(), f));
+            }
+        }
+        for (id, f) in failures {
+            self.recover(&id, f);
         }
         if let Some(id) = focused {
             self.apply(Action::Select(id));
@@ -747,6 +760,39 @@ impl App {
         }
     }
 
+    /// A page crashed or got stuck: it is reloaded (or the account opened
+    /// again when its browser is gone), so a hidden account does not stay
+    /// dead for hours. At most 3 times in 10 minutes per account, so a page
+    /// that keeps crashing is left alone.
+    fn recover(&mut self, id: &str, failure: Failure) {
+        const WINDOW: Duration = Duration::from_secs(10 * 60);
+        // stuck: only when it is still stuck half a minute later
+        if failure == Failure::Unresponsive {
+            let since = *self
+                .unresponsive
+                .entry(id.to_string())
+                .or_insert_with(Instant::now);
+            if since.elapsed() < Duration::from_secs(30) {
+                return;
+            }
+        }
+        self.unresponsive.remove(id);
+        let times = self.recoveries.entry(id.to_string()).or_default();
+        times.retain(|t| t.elapsed() < WINDOW);
+        if times.len() >= 3 {
+            return;
+        }
+        times.push(Instant::now());
+        match failure {
+            Failure::BrowserGone => self.restart_account(id),
+            Failure::PageCrashed | Failure::Unresponsive => {
+                if let Some(p) = self.panels.get(id) {
+                    p.reload();
+                }
+            }
+        }
+    }
+
     fn keyboard(&mut self, ctx: &egui::Context) {
         let (f11, esc, new) = ctx.input(|i| {
             (
@@ -786,7 +832,7 @@ impl App {
         for (id, p) in &self.panels {
             if let Some(a) = self.cfg.account(id) {
                 let selected = self.cfg.selected.as_deref() == Some(id.as_str());
-                p.set_fps(self.cfg.fps_for(a, selected));
+                p.set_fps(self.cfg.fps_for(a, selected), self.cfg.keep_active);
             }
         }
     }

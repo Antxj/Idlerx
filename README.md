@@ -105,8 +105,13 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
   less memory**, while the game keeps running. Minimized, Idlerx uses about
   ten times less CPU
 - "Keep games running in the background" (on by default) stops the browser
-  from slowing down the timers of hidden pages, so idle games keep
-  progressing. Turn it off to save even more CPU
+  from slowing down the timers of hidden pages, and keeps games awake while
+  they are not on screen: a hidden page is told it is still visible and its
+  drawing loop runs at 5 frames per second, so games that run their logic
+  in it (Phaser and most canvas games) do not freeze or pause themselves.
+  Turn it off to save even more CPU
+- A page that crashes or stops responding reloads by itself (and the
+  account opens again if its browser closed), up to 3 times in 10 minutes
 - The interface only repaints when something changes (or once a second for
   the numbers)
 - **Pausing** accounts you are not using frees all their memory
