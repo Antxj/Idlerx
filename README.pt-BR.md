@@ -40,8 +40,8 @@ resolve isso:
 - 🪟 **Tudo numa janela**: uma conta por vez ou todas lado a lado, em grade.
 - 🌐 **VPN por grupo**: cada grupo de contas sai pela sua VPN, com kill
   switch, sem mexer no resto do computador.
-- 🖱️ **Macros que não roubam o seu mouse**: cliques e teclas repetidos na
-  conta, enquanto você usa o PC normalmente.
+- 🖱️ **Macros que não roubam o seu mouse**: grave jogando e a conta repete
+  seus cliques e teclas enquanto você usa o PC normalmente.
 - 🍃 **Leve**: os jogos não precisam de 60 quadros por segundo nem de toda a
   sua memória.
 - 🌙 **Sempre rodando**: minimize ou mande para a bandeja e os jogos
@@ -95,8 +95,11 @@ Repita cliques e teclas numa conta, **sem usar o mouse nem o teclado do
 Windows**: você continua usando o computador normalmente, e a macro
 funciona até com a conta escondida, minimizada ou na bandeja.
 
-- **Monte clicando numa foto da tela**: clique onde a macro deve clicar.
-  Botão esquerdo ou direito, simples ou duplo.
+- **Grave jogando**: clique em **Gravar macro** e use o jogo normalmente.
+  Seus cliques, teclas e o tempo entre eles viram a macro, prontos para
+  ajustar.
+- **Ou monte numa foto da tela**: clique onde a macro deve clicar. Botão
+  esquerdo ou direito, simples ou duplo.
 - **Teclas e esperas**: letras, números, F1–F12, setas, Espaço, Enter,
   Esc…
 - **Repetição**: a cada quantos segundos, quantas vezes ou até você parar.
@@ -105,7 +108,7 @@ funciona até com a conta escondida, minimizada ou na bandeja.
 - **Para sozinha** se a página recarregar, a conta fechar ou a VPN cair.
   E o ícone da bandeja tem **Parar todas as macros**.
 
-Botão direito na conta › **Macro…**
+Botão direito na conta › **Gravar macro** ou **Macro…**
 
 ### Leve e sempre rodando
 

@@ -187,7 +187,9 @@ impl App {
     pub(super) fn status_text(&self, id: &str) -> (String, Color32, bool) {
         if let Some(p) = self.panels.get(id) {
             let mut s = metrics::fmt_duration(p.started.elapsed());
-            if self.macro_running(id) {
+            if self.recording_on(id) {
+                s = format!("● gravando · {s}");
+            } else if self.macro_running(id) {
                 s = format!("⟲ macro · {s}");
             }
             if let Some(u) = self.metrics.get(id) {
@@ -406,6 +408,23 @@ impl App {
         ui.separator();
         if ui.button(tr!("⟲  Macro…", "⟲  Macro…")).clicked() {
             actions.push(Action::EditMacro(id()));
+        }
+        if open {
+            if self.recording_on(&a.id) {
+                let stop = RichText::new(tr!("⏹  Parar gravação", "⏹  Stop recording")).color(DANGER);
+                if ui.button(stop).clicked() {
+                    actions.push(Action::StopRecording);
+                }
+            } else if ui
+                .button(tr!("⏺  Gravar macro", "⏺  Record a macro"))
+                .on_hover_text(tr!(
+                    "Use o jogo normalmente: seus cliques, teclas e o tempo entre eles viram a macro.",
+                    "Use the game normally: your clicks, keys and the time between them become the macro."
+                ))
+                .clicked()
+            {
+                actions.push(Action::RecordMacro(id()));
+            }
         }
         if open && a.macro_steps.is_some() {
             let label = if self.macro_running(&a.id) {

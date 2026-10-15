@@ -5,6 +5,10 @@
 //    Idle games do not need 60 drawings a second. Games that compute
 //    progress from the real time keep the same speed; only the drawing
 //    becomes less frequent. Limit 0 = no limit.
+// 3. Records the user's clicks and keys for a macro, while Idlerx asks for it
+//    ("rec"): only watches, never blocks or changes anything. An iframe
+//    passes its events to its parent, which adds the iframe's position, so
+//    the top document reports every point relative to the whole page.
 // 2. Keeps the game awake while the account is not on screen ("awake", on
 //    with "Keep games running in the background"): a hidden page gets no
 //    animation frames at all, so games that run their logic in the drawing
@@ -130,7 +134,7 @@
     st.awake = wake;
     if (changed) reschedule();
     for (let i = 0; i < window.frames.length; i++) {
-      try { window.frames[i].postMessage({ __idlerxFps: st.fps, awake: st.awake }, '*'); } catch (e) {}
+      try { window.frames[i].postMessage({ __idlerxFps: st.fps, awake: st.awake, rec: st.rec }, '*'); } catch (e) {}
     }
   };
   Object.defineProperty(window, '__idlerxFps', { value: st });
@@ -158,13 +162,57 @@
     if (st.awake) ev.stopImmediatePropagation();
   }, true);
 
+  // ---- recording ----
+  st.rec = false;
+  const top = window.parent === window;
+  st.record = (on) => {
+    st.rec = !!on;
+    for (let i = 0; i < window.frames.length; i++) {
+      try { window.frames[i].postMessage({ __idlerxRec: st.rec }, '*'); } catch (e) {}
+    }
+  };
+  // a recorded event at (x, y) in this document's pixels
+  const report = (ev) => {
+    if (top) {
+      if (ev.kind === 'click') {
+        ev.x = ev.x / Math.max(1, window.innerWidth);
+        ev.y = ev.y / Math.max(1, window.innerHeight);
+      }
+      try { window.chrome.webview.postMessage({ __idlerxRec: ev }); } catch (e) {}
+    } else {
+      try { window.parent.postMessage({ __idlerxRecEvent: ev }, '*'); } catch (e) {}
+    }
+  };
+  window.addEventListener('mousedown', (e) => {
+    if (!st.rec || !e.isTrusted || e.button > 2 || e.button === 1) return;
+    report({ kind: 'click', x: e.clientX, y: e.clientY, button: e.button === 2 ? 'right' : 'left', detail: e.detail, t: Date.now() });
+  }, true);
+  window.addEventListener('keydown', (e) => {
+    if (!st.rec || !e.isTrusted || e.repeat) return;
+    report({ kind: 'key', code: e.code, t: Date.now() });
+  }, true);
+
   window.addEventListener('message', (e) => {
     const d = e.data;
     if (!d || typeof d !== 'object') return;
     if (typeof d.__idlerxFps === 'number' && e.source === window.parent && window.parent !== window) {
       st.set(d.__idlerxFps, d.awake);
+      if (typeof d.rec === 'boolean') st.record(d.rec);
+    } else if (typeof d.__idlerxRec === 'boolean' && e.source === window.parent && !top) {
+      st.record(d.__idlerxRec);
+    } else if (d.__idlerxRecEvent && st.rec && e.source) {
+      // from one of our iframes: its position is added to the point
+      const ev = d.__idlerxRecEvent;
+      if (ev.kind === 'click') {
+        const frame = [...document.querySelectorAll('iframe, frame')].find((f) => f.contentWindow === e.source);
+        if (!frame) return;
+        const r = frame.getBoundingClientRect();
+        ev.x = Number(ev.x) + r.left + frame.clientLeft;
+        ev.y = Number(ev.y) + r.top + frame.clientTop;
+      }
+      report(ev);
     } else if (d.__idlerxFpsAsk && e.source) {
-      try { e.source.postMessage({ __idlerxFps: st.fps, awake: st.awake }, '*'); } catch (err) {}
+      try { e.source.postMessage({ __idlerxFps: st.fps, awake: st.awake, rec: st.rec }, '*'); } catch (err) {}
     }
   });
 

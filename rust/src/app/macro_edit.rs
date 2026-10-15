@@ -36,13 +36,22 @@ pub(super) struct Shot {
 impl App {
     /// Takes a picture of the page, then opens the editor.
     pub(super) fn open_macro_editor(&mut self, id: &str) {
+        self.open_macro_editor_with(id, None);
+    }
+
+    /// The editor with these steps instead of the saved ones (a recording).
+    pub(super) fn open_macro_editor_with(&mut self, id: &str, steps: Option<Vec<Step>>) {
         let Some(a) = self.cfg.account(id) else {
             return;
         };
+        let mut m = a.macro_steps.clone().unwrap_or_default();
+        if let Some(steps) = steps {
+            m.steps = steps;
+        }
         let edit = MacroEdit {
             id: id.to_string(),
             name: a.name.clone(),
-            m: a.macro_steps.clone().unwrap_or_default(),
+            m,
             picture: None,
             button: MouseButton::Left,
             double: false,
@@ -119,6 +128,7 @@ impl App {
         let mut save = false;
         let mut start = false;
         let mut retake = false;
+        let mut record = false;
         let modal = egui::Modal::new(egui::Id::new("macro")).show(ctx, |ui| {
             let dark = ui.visuals().dark_mode;
             ui.set_width(660.0);
@@ -155,6 +165,18 @@ impl App {
                         .clicked()
                     {
                         retake = true;
+                    }
+                    if ui
+                        .button(RichText::new(tr!("⏺ Gravar", "⏺ Record")).color(DANGER))
+                        .on_hover_text(tr!(
+                            "Fecha o editor; use o jogo normalmente: seus cliques, teclas e o \
+                             tempo entre eles viram os passos (substituem os atuais).",
+                            "Closes the editor; use the game normally: your clicks, keys and \
+                             the time between them become the steps (replacing the current ones)."
+                        ))
+                        .clicked()
+                    {
+                        record = true;
                     }
                 });
             });
@@ -243,6 +265,11 @@ impl App {
                 self.start_macro(&st.id);
             }
             keep = false;
+        }
+        if record {
+            self.dialog = None;
+            self.start_recording(&st.id);
+            return false;
         }
         if retake {
             let edit = MacroEdit {

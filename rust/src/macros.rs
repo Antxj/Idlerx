@@ -177,6 +177,74 @@ impl Run {
     }
 }
 
+/// Turns what the page reported while recording into steps: clicks, keys,
+/// and the time the user took between them as waits.
+#[derive(Default)]
+pub struct Recorder {
+    pub steps: Vec<Step>,
+    /// Time of the last recorded action (ms, the page's clock).
+    last: Option<f64>,
+}
+
+impl Recorder {
+    /// One event from the page (see fps.js); anything malformed is ignored.
+    pub fn push(&mut self, ev: &serde_json::Value) {
+        let Some(t) = ev["t"].as_f64() else {
+            return;
+        };
+        let step = match ev["kind"].as_str() {
+            Some("click") => {
+                let (Some(x), Some(y)) = (ev["x"].as_f64(), ev["y"].as_f64()) else {
+                    return;
+                };
+                let button = if ev["button"].as_str() == Some("right") {
+                    MouseButton::Right
+                } else {
+                    MouseButton::Left
+                };
+                let detail = ev["detail"].as_u64().unwrap_or(1);
+                if detail >= 2 {
+                    // the second press of a double click marks the first one
+                    if let Some(Step::Click {
+                        button: b, double, ..
+                    }) = self.steps.last_mut()
+                    {
+                        if *b == button && detail == 2 {
+                            *double = true;
+                        }
+                    }
+                    return;
+                }
+                Step::Click {
+                    x: (x as f32).clamp(0.0, 1.0),
+                    y: (y as f32).clamp(0.0, 1.0),
+                    button,
+                    double: false,
+                }
+            }
+            Some("key") => {
+                let code = ev["code"].as_str().unwrap_or_default();
+                let Some(k) = KEYS.iter().find(|k| k.code == code) else {
+                    return; // a key macros cannot press (Shift, Ctrl...)
+                };
+                Step::Key {
+                    key: k.name.to_string(),
+                }
+            }
+            _ => return,
+        };
+        if let Some(last) = self.last {
+            // the time taken, to a tenth of a second
+            let secs = (((t - last) / 100.0).round() / 10.0) as f32;
+            if secs >= 0.1 {
+                self.steps.push(Step::Wait { secs });
+            }
+        }
+        self.last = Some(t);
+        self.steps.push(step);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,6 +295,42 @@ mod tests {
         let (out, n) = r.tick(&m, n.unwrap());
         assert_eq!(out.len(), 1);
         assert!(n.is_none(), "two rounds were asked");
+    }
+
+    #[test]
+    fn recording_to_steps() {
+        use serde_json::json;
+        let mut r = Recorder::default();
+        r.push(&json!({"kind":"click","x":0.25,"y":0.5,"button":"left","detail":1,"t":1000.0}));
+        // 1.26 s later, a double click
+        r.push(&json!({"kind":"click","x":0.5,"y":0.5,"button":"left","detail":1,"t":2260.0}));
+        r.push(&json!({"kind":"click","x":0.5,"y":0.5,"button":"left","detail":2,"t":2400.0}));
+        // a key the macro knows, and one it does not
+        r.push(&json!({"kind":"key","code":"F2","t":3000.0}));
+        r.push(&json!({"kind":"key","code":"ShiftLeft","t":3100.0}));
+        r.push(&json!({"kind":"key","code":"KeyA","t":3040.0}));
+        r.push(&json!({"bad":true}));
+        assert_eq!(
+            r.steps,
+            vec![
+                Step::Click {
+                    x: 0.25,
+                    y: 0.5,
+                    button: MouseButton::Left,
+                    double: false
+                },
+                Step::Wait { secs: 1.3 },
+                Step::Click {
+                    x: 0.5,
+                    y: 0.5,
+                    button: MouseButton::Left,
+                    double: true
+                },
+                Step::Wait { secs: 0.7 },
+                Step::Key { key: "F2".into() },
+                Step::Key { key: "A".into() },
+            ]
+        );
     }
 
     #[test]

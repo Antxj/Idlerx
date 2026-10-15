@@ -84,6 +84,28 @@ impl App {
                 }
                 self.layout_switch(ui, actions);
 
+                // recording a macro: always in sight, one click to finish
+                if self.recording.is_some() {
+                    let text = trf!(
+                        "⏹ Parar gravação ({} passos)",
+                        "⏹ Stop recording ({} steps)",
+                        self.recorded_steps()
+                    );
+                    if ui
+                        .add(
+                            egui::Button::new(RichText::new(text).color(Color32::WHITE))
+                                .fill(DANGER),
+                        )
+                        .bar_tip(tr!(
+                            "Abre o editor com o que foi gravado.",
+                            "Opens the editor with what was recorded."
+                        ))
+                        .clicked()
+                    {
+                        actions.push(Action::StopRecording);
+                    }
+                }
+
                 if let Some(n) = update::available() {
                     let t = RichText::new(trf!("⬆ Versão {n}", "⬆ Version {n}")).color(ACCENT);
                     if ui

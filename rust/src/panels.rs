@@ -28,7 +28,10 @@ use webview2_com::{
     CreateCoreWebView2EnvironmentCompletedHandler, ExecuteScriptCompletedHandler,
     FocusChangedEventHandler, GetProcessExtendedInfosCompletedHandler, ProcessFailedEventHandler,
 };
-use webview2_com::{CallDevToolsProtocolMethodCompletedHandler, CapturePreviewCompletedHandler};
+use webview2_com::{
+    CallDevToolsProtocolMethodCompletedHandler, CapturePreviewCompletedHandler,
+    WebMessageReceivedEventHandler,
+};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
 
@@ -244,6 +247,9 @@ pub struct Panel {
     failure: Rc<Cell<Option<Failure>>>,
     /// A new document started loading since the last call.
     loaded: Rc<Cell<bool>>,
+    /// Recording a macro: what the page reported so far.
+    recording: Rc<Cell<bool>>,
+    recorded: Rc<RefCell<Vec<serde_json::Value>>>,
 }
 
 impl Drop for Panel {
@@ -363,6 +369,28 @@ impl Panel {
                 Ok(())
             }));
             let _ = webview.add_ProcessFailed(&failed, &mut token);
+            // macro recording: the page reports the user's clicks and keys
+            let recording = Rc::new(Cell::new(false));
+            let recorded = Rc::new(RefCell::new(Vec::new()));
+            let (on, list) = (recording.clone(), recorded.clone());
+            let w = wake.clone();
+            let messages = WebMessageReceivedEventHandler::create(Box::new(move |_, args| {
+                let Some(args) = args else { return Ok(()) };
+                if !on.get() {
+                    return Ok(());
+                }
+                let mut json = PWSTR::null();
+                args.WebMessageAsJson(&mut json)?;
+                let text = take_pwstr(json);
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if v["__idlerxRec"].is_object() {
+                        list.borrow_mut().push(v["__idlerxRec"].clone());
+                        w();
+                    }
+                }
+                Ok(())
+            }));
+            let _ = webview.add_WebMessageReceived(&messages, &mut token);
             let _ = controller.add_GotFocus(&focus_handler, &mut token);
             let _ = controller.add_AcceleratorKeyPressed(&key_handler, &mut token);
 
@@ -383,6 +411,8 @@ impl Panel {
                 awake_sent: Cell::new(None),
                 failure,
                 loaded,
+                recording,
+                recorded,
             };
             p.set_save_passwords(save_passwords);
             p.set_muted(account.muted);
@@ -623,6 +653,24 @@ impl Panel {
         }
         self.devtools("Input.dispatchKeyEvent", down.to_string());
         self.devtools("Input.dispatchKeyEvent", up.to_string());
+    }
+
+    /// Starts or stops reporting the user's clicks and keys (macro
+    /// recording). Asked again now and then: a new document starts off.
+    pub fn record(&self, on: bool) {
+        self.recording.set(on);
+        let js = format!("window.__idlerxFps && window.__idlerxFps.record({on})");
+        let _ = unsafe {
+            self.webview.ExecuteScript(
+                &HSTRING::from(js),
+                &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
+            )
+        };
+    }
+
+    /// Events reported since the last call, while recording.
+    pub fn take_recorded(&self) -> Vec<serde_json::Value> {
+        std::mem::take(&mut self.recorded.borrow_mut())
     }
 
     /// A picture of the page (PNG), delivered to `done` on the UI thread

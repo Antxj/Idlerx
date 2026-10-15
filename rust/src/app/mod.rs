@@ -109,6 +109,10 @@ enum Action {
     ToggleMacro(String),
     /// Opens the macro editor (a picture of the page is taken first).
     EditMacro(String),
+    /// Records the user's clicks and keys on an account as a macro.
+    RecordMacro(String),
+    /// Ends the recording and opens the editor with it.
+    StopRecording,
     /// Connects a group's VPN again (after a failure).
     RetryVpn(String),
     InstallOpenVpn,
@@ -218,6 +222,7 @@ pub struct App {
     macro_shot: Option<macro_edit::Shot>,
     /// IDLERX_SCREENSHOT=start-macros: accounts whose macro was started.
     macro_started_once: HashSet<String>,
+    recording: Option<macro_run::Recording>,
     /// The interface context (to wake it from page callbacks).
     ctx: egui::Context,
 }
@@ -328,6 +333,7 @@ impl App {
             macro_runs: HashMap::new(),
             macro_shot: None,
             macro_started_once: HashSet::new(),
+            recording: None,
             ctx: ctx.clone(),
         }
     }
@@ -634,6 +640,8 @@ impl App {
                 }
             }
             Action::EditMacro(id) => self.open_macro_editor(&id),
+            Action::RecordMacro(id) => self.start_recording(&id),
+            Action::StopRecording => self.stop_recording(true),
             Action::ToggleCollapse(gid) => {
                 if let Some(g) = self.cfg.group_mut(&gid) {
                     g.collapsed = !g.collapsed;
@@ -1146,6 +1154,7 @@ impl eframe::App for App {
         self.tray_tick(ctx);
         self.open_next(ctx);
         self.macro_tick(ctx);
+        self.recording_tick();
         self.macro_shot_ready();
         self.poll(ctx);
         self.show_window(ctx);

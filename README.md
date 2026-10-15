@@ -40,8 +40,8 @@ computer. Idlerx sorts it out:
   side in a grid.
 - 🌐 **A VPN per group**: each group of accounts goes out through its own
   VPN, with a kill switch, without touching the rest of the computer.
-- 🖱️ **Macros that don't take over your mouse**: repeated clicks and keys
-  on an account while you keep using your PC.
+- 🖱️ **Macros that don't take over your mouse**: record by playing and the
+  account repeats your clicks and keys while you keep using your PC.
 - 🍃 **Lightweight**: games don't need 60 frames a second or all your
   memory.
 - 🌙 **Always running**: minimize it or send it to the tray and the games
@@ -96,8 +96,11 @@ Repeat clicks and keys on an account **without using the Windows mouse or
 keyboard**: you keep using your computer normally, and the macro works even
 with the account hidden, minimized or in the tray.
 
-- **Build it by clicking a picture of the page**: click where the macro
-  should click. Left or right button, single or double.
+- **Record it by playing**: click **Record a macro** and use the game
+  normally. Your clicks, keys and the time between them become the macro,
+  ready to adjust.
+- **Or build it on a picture of the page**: click where the macro should
+  click. Left or right button, single or double.
 - **Keys and waits**: letters, digits, F1–F12, arrows, Space, Enter, Esc…
 - **Repetition**: every so many seconds, a number of times or until you
   stop it.
@@ -106,7 +109,7 @@ with the account hidden, minimized or in the tray.
 - **Stops by itself** if the page reloads, the account closes or the VPN
   drops. And the tray icon has **Stop all macros**.
 
-Right-click the account › **Macro…**
+Right-click the account › **Record a macro** or **Macro…**
 
 ### Lightweight and always running
 
