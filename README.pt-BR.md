@@ -59,6 +59,10 @@ próprio progresso.</sub>
   cair, elas ficam sem internet até ela voltar, nunca pela sua conexão. O
   resto do computador e os outros grupos não passam por ela. Detalhes em
   [VPN dos grupos](#vpn-dos-grupos)
+- **Macro por conta**: cliques, teclas e esperas repetidos na página da
+  conta, sem usar o mouse nem o teclado do Windows (você continua usando o
+  PC normalmente) e funcionando com a conta escondida, minimizada ou na
+  bandeja. Detalhes em [Macros](#macros)
 - **Modo foco** (F11): some com a lista e a barra, fica só o jogo. F11 ou Esc
   traz tudo de volta
 - **CPU e RAM** de cada conta (na lista e no quadro da grade), de cada
@@ -217,7 +221,7 @@ Variáveis úteis para testes:
 | `IDLERX_INSTANCE` | separa uma instância de teste do app de uso diário |
 | `IDLERX_LANGUAGE` | força `pt` ou `en` |
 | `IDLERX_UPDATE_URL` | consulta outro endereço em vez da API do GitHub |
-| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu`, `group`, `new-account` ou `pointer:x,y` (ponteiro parado ali; `pointer:x,y,right` também clica com o botão direito) |
+| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu`, `group`, `new-account` ou `pointer:x,y` (ponteiro parado ali; `pointer:x,y,right` também clica com o botão direito) , `start-macros` (as macros iniciam sozinhas) ou `macro-editor` |
 
 ## Onde ficam os dados
 
@@ -260,11 +264,34 @@ grupos com VPN, o **servidor da sua VPN** e uma consulta a
 os sites veem (e conferir que o túnel funciona antes de liberar as
 páginas).
 
+## Macros
+
+Botão direito numa conta › **Macro…**. O editor mostra uma foto da página:
+clique nela onde a macro deve clicar (botão esquerdo ou direito, simples ou
+duplo). Adicione esperas e teclas (letras, números, F1–F12, setas, Espaço,
+Enter, Esc…), mude a ordem e escolha a repetição: a cada quantos segundos
+depois do último passo e quantas rodadas (0 = até parar).
+
+- Os pontos são guardados em proporção da página (ex.: 25% da largura, 50%
+  da altura), então continuam no lugar se o quadro mudar de tamanho na
+  grade. Se o próprio jogo mudar de layout, ajuste os pontos ("mover").
+- Cliques e teclas vão direto para a página, pelo protocolo de depuração do
+  navegador: o cursor do Windows não se mexe e a página recebe eventos
+  normais (também dentro de iframes).
+- Iniciar ou parar: botão direito na conta › **Iniciar a macro** / **Parar a
+  macro**. A conta mostra "⟲ macro" enquanto roda. O menu do ícone da
+  bandeja tem **Parar todas as macros**.
+- A macro para sozinha se a página recarregar, a conta fechar ou a VPN do
+  grupo cair; cada início e parada vai para o registro das páginas.
+- A conta precisa ter aparecido na tela pelo menos uma vez desde que abriu
+  (é assim que o Idlerx sabe o tamanho da página).
+
 ## Uso responsável
 
-O Idlerx organiza sessões de navegador; ele **não automatiza ações** nos
-jogos nem captura credenciais. Respeite os termos de uso de cada jogo,
-inclusive quanto ao uso de várias contas.
+O Idlerx organiza sessões de navegador e tem macros que repetem cliques e
+teclas que você mesmo definiu; ele não captura credenciais. Muitos jogos
+proíbem automação e o uso de várias contas: confira os termos de uso de
+cada jogo antes de usar.
 
 ## Desinstalar
 

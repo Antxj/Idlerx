@@ -16,6 +16,7 @@ pub enum Command {
     Show,
     OpenAll,
     PauseAll,
+    StopMacros,
     Quit,
 }
 
@@ -75,6 +76,8 @@ impl Tray {
             true,
             None,
         );
+        let stop_macros =
+            MenuItem::new(tr!("Parar todas as macros", "Stop all macros"), true, None);
         let quit = MenuItem::new(tr!("Sair", "Quit"), true, None);
         let menu = Menu::new();
         menu.append_items(&[
@@ -82,6 +85,7 @@ impl Tray {
             &PredefinedMenuItem::separator(),
             &open_all,
             &pause_all,
+            &stop_macros,
             &PredefinedMenuItem::separator(),
             &quit,
         ])
@@ -92,6 +96,7 @@ impl Tray {
             (show.id().clone(), Command::Show),
             (open_all.id().clone(), Command::OpenAll),
             (pause_all.id().clone(), Command::PauseAll),
+            (stop_macros.id().clone(), Command::StopMacros),
             (quit.id().clone(), Command::Quit),
         ];
         let wake = std::sync::Arc::new(wake);

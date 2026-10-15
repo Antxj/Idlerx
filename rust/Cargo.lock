@@ -1251,6 +1251,7 @@ dependencies = [
  "embed-resource",
  "getrandom",
  "hmac",
+ "image",
  "open",
  "raw-window-handle",
  "rfd",

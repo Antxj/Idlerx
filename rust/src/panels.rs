@@ -28,6 +28,7 @@ use webview2_com::{
     CreateCoreWebView2EnvironmentCompletedHandler, ExecuteScriptCompletedHandler,
     FocusChangedEventHandler, GetProcessExtendedInfosCompletedHandler, ProcessFailedEventHandler,
 };
+use webview2_com::{CallDevToolsProtocolMethodCompletedHandler, CapturePreviewCompletedHandler};
 use windows::Win32::Foundation::{HWND, RECT};
 use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
 
@@ -544,6 +545,131 @@ impl Panel {
 
     pub fn set_zoom(&self, zoom: f64) {
         let _ = unsafe { self.controller.SetZoomFactor(zoom.clamp(0.25, 5.0)) };
+    }
+
+    // -------------------------------------------------------------- macros --
+
+    /// Size of the page in CSS pixels (what the page's own coordinates use),
+    /// from where it was last placed. None if it was never on screen.
+    fn css_size(&self) -> Option<(f64, f64)> {
+        let b = self.bounds?;
+        let mut scale = 1.0;
+        if let Ok(c3) = self.controller.cast::<ICoreWebView2Controller3>() {
+            let _ = unsafe { c3.RasterizationScale(&mut scale) };
+        }
+        let factor = (scale * self.zoom()).max(0.01);
+        Some(((b.2 - b.0) as f64 / factor, (b.3 - b.1) as f64 / factor))
+    }
+
+    /// Sends a DevTools protocol command (input reaches the page directly:
+    /// the Windows mouse and keyboard are not involved).
+    fn devtools(&self, method: &str, params: String) {
+        let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(|_, _| Ok(())));
+        let _ = unsafe {
+            self.webview.CallDevToolsProtocolMethod(
+                &HSTRING::from(method),
+                &HSTRING::from(params),
+                &handler,
+            )
+        };
+    }
+
+    /// A click at a point given as a fraction of the page's width and
+    /// height. False when the page size is not known yet.
+    pub fn click(&self, fx: f32, fy: f32, button: config::MouseButton, double: bool) -> bool {
+        let Some((w, h)) = self.css_size() else {
+            return false;
+        };
+        let x = (fx.clamp(0.0, 1.0) as f64 * w).round();
+        let y = (fy.clamp(0.0, 1.0) as f64 * h).round();
+        let (name, mask) = match button {
+            config::MouseButton::Left => ("left", 1),
+            config::MouseButton::Right => ("right", 2),
+        };
+        let event = |kind: &str, buttons: u32, count: u32| {
+            format!(
+                r#"{{"type":"{kind}","x":{x},"y":{y},"button":"{name}","buttons":{buttons},"clickCount":{count},"pointerType":"mouse"}}"#
+            )
+        };
+        let moved = format!(r#"{{"type":"mouseMoved","x":{x},"y":{y}}}"#);
+        self.devtools("Input.dispatchMouseEvent", moved);
+        let clicks = if double { 2 } else { 1 };
+        for count in 1..=clicks {
+            self.devtools(
+                "Input.dispatchMouseEvent",
+                event("mousePressed", mask, count),
+            );
+            self.devtools("Input.dispatchMouseEvent", event("mouseReleased", 0, count));
+        }
+        true
+    }
+
+    /// Presses and releases a key (see `macros::KEYS`).
+    pub fn key(&self, k: &crate::macros::Key) {
+        let mut down = serde_json::json!({
+            "type": if k.text.is_some() { "keyDown" } else { "rawKeyDown" },
+            "key": k.key,
+            "code": k.code,
+            "windowsVirtualKeyCode": k.vk,
+            "nativeVirtualKeyCode": k.vk,
+        });
+        if let Some(t) = k.text {
+            down["text"] = t.into();
+        }
+        let mut up = down.clone();
+        up["type"] = "keyUp".into();
+        if let Some(o) = up.as_object_mut() {
+            o.remove("text");
+        }
+        self.devtools("Input.dispatchKeyEvent", down.to_string());
+        self.devtools("Input.dispatchKeyEvent", up.to_string());
+    }
+
+    /// A picture of the page (PNG), delivered to `done` on the UI thread
+    /// (None if it could not be taken).
+    pub fn capture(&self, done: impl FnOnce(Option<Vec<u8>>) + 'static) {
+        use windows::Win32::System::Com::{IStream, STREAM_SEEK_SET};
+        use windows::Win32::UI::Shell::SHCreateMemStream;
+        let Some(stream) = (unsafe { SHCreateMemStream(None) }) else {
+            done(None);
+            return;
+        };
+        let s2: IStream = stream.clone();
+        let done = RefCell::new(Some(done));
+        let handler = CapturePreviewCompletedHandler::create(Box::new(move |res| {
+            let Some(done) = done.borrow_mut().take() else {
+                return Ok(());
+            };
+            if res.is_err() {
+                done(None);
+                return Ok(());
+            }
+            let mut out = Vec::new();
+            unsafe {
+                let _ = s2.Seek(0, STREAM_SEEK_SET, None);
+                let mut buf = vec![0u8; 64 * 1024];
+                loop {
+                    let mut read = 0u32;
+                    let hr = s2.Read(buf.as_mut_ptr() as _, buf.len() as u32, Some(&mut read));
+                    if hr.is_err() || read == 0 {
+                        break;
+                    }
+                    out.extend_from_slice(&buf[..read as usize]);
+                }
+            }
+            done((!out.is_empty()).then_some(out));
+            Ok(())
+        }));
+        let r = unsafe {
+            self.webview.CapturePreview(
+                COREWEBVIEW2_CAPTURE_PREVIEW_IMAGE_FORMAT_PNG,
+                &stream,
+                &handler,
+            )
+        };
+        if r.is_err() {
+            // the handler never runs: nothing to wait for
+        }
     }
 
     /// Current zoom (it also changes with Ctrl+wheel inside the page).

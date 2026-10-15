@@ -29,6 +29,8 @@ use std::time::{Duration, Instant};
 
 mod dialogs;
 mod grid;
+mod macro_edit;
+mod macro_run;
 mod network;
 mod sidebar;
 mod toolbar;
@@ -103,6 +105,10 @@ enum Action {
     PauseGroup(String),
     /// Grid shows only this group (None = all accounts).
     GridGroup(Option<String>),
+    /// Starts or stops an account's macro.
+    ToggleMacro(String),
+    /// Opens the macro editor (a picture of the page is taken first).
+    EditMacro(String),
     /// Connects a group's VPN again (after a failure).
     RetryVpn(String),
     InstallOpenVpn,
@@ -140,6 +146,7 @@ enum Dialog {
     ConfirmRemove(String),
     ConfirmClear(String),
     ConfirmQuit,
+    Macro(macro_edit::MacroEdit),
 }
 
 pub struct App {
@@ -205,6 +212,14 @@ pub struct App {
     unresponsive: HashMap<String, Instant>,
     /// IDLERX_SCREENSHOT=pointer:x,y,right: the right click was sent.
     pointer_clicked: bool,
+    /// Macros being played, per account.
+    macro_runs: HashMap<String, crate::macros::Run>,
+    /// Picture of a page for the macro editor, on its way.
+    macro_shot: Option<macro_edit::Shot>,
+    /// IDLERX_SCREENSHOT=start-macros: accounts whose macro was started.
+    macro_started_once: HashSet<String>,
+    /// The interface context (to wake it from page callbacks).
+    ctx: egui::Context,
 }
 
 impl App {
@@ -310,6 +325,10 @@ impl App {
             recoveries: HashMap::new(),
             unresponsive: HashMap::new(),
             pointer_clicked: false,
+            macro_runs: HashMap::new(),
+            macro_shot: None,
+            macro_started_once: HashSet::new(),
+            ctx: ctx.clone(),
         }
     }
 
@@ -354,6 +373,7 @@ impl App {
     }
 
     fn close_panel(&mut self, id: &str) {
+        self.stop_macro(id, "a conta foi fechada");
         if self.is_open_or_opening(id) {
             self.note(id, "fechada (pausada)");
         }
@@ -606,6 +626,14 @@ impl App {
                 }
             }
             Action::InstallOpenVpn => self.install_openvpn(),
+            Action::ToggleMacro(id) => {
+                if self.macro_running(&id) {
+                    self.stop_macro(&id, "parada por você");
+                } else {
+                    self.start_macro(&id);
+                }
+            }
+            Action::EditMacro(id) => self.open_macro_editor(&id),
             Action::ToggleCollapse(gid) => {
                 if let Some(g) = self.cfg.group_mut(&gid) {
                     g.collapsed = !g.collapsed;
@@ -713,6 +741,8 @@ impl App {
         }
         for (id, url) in loads {
             self.note(&id, &format!("documento carregando: {url}"));
+            // the points may not mean the same on another page
+            self.stop_macro(&id, "a página carregou de novo");
         }
         for (id, f) in failures {
             self.recover(&id, f);
@@ -988,6 +1018,7 @@ impl App {
                         self.close_panel(&id);
                     }
                 }
+                tray::Command::StopMacros => self.stop_all_macros("parada pelo menu da bandeja"),
                 tray::Command::Quit => {
                     let minimized = ctx.input(|i| i.viewport().minimized.unwrap_or(false));
                     self.show_and_ask_quit(ctx, minimized);
@@ -1114,6 +1145,8 @@ impl eframe::App for App {
         self.sync_vpn();
         self.tray_tick(ctx);
         self.open_next(ctx);
+        self.macro_tick(ctx);
+        self.macro_shot_ready();
         self.poll(ctx);
         self.show_window(ctx);
         self.apply_fps();

@@ -59,6 +59,10 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
   if the VPN drops, they stay offline until it is back, never through your
   connection. The rest of the computer and the other groups do not go
   through it. Details in [Group VPN](#group-vpn)
+- **Macro per account**: clicks, keys and waits repeated on the account's
+  page, without using the Windows mouse or keyboard (you keep using the
+  computer normally), and working with the account hidden, minimized or in
+  the tray. Details in [Macros](#macros)
 - **Focus mode** (F11): hides the list and the bar, only the game remains.
   F11 or Esc brings everything back
 - **CPU and RAM** of each account (in the list and on the grid cell), of
@@ -217,7 +221,7 @@ Useful variables for testing:
 | `IDLERX_INSTANCE` | separates a test instance from the everyday app |
 | `IDLERX_LANGUAGE` | forces `pt` or `en` |
 | `IDLERX_UPDATE_URL` | queries another address instead of the GitHub API |
-| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings`, `grid-menu`, `group`, `new-account` or `pointer:x,y` (pointer resting there; `pointer:x,y,right` also right-clicks) |
+| `IDLERX_SCREENSHOT` | opens on a given screen for documentation pictures: `settings`, `grid-menu`, `group`, `new-account` or `pointer:x,y` (pointer resting there; `pointer:x,y,right` also right-clicks) , `start-macros` (every macro starts by itself) or `macro-editor` |
 
 ## Where the data lives
 
@@ -260,11 +264,34 @@ in groups with a VPN, **your VPN server** and one request to
 IP the sites see (and to check the tunnel works before the pages are let
 through).
 
+## Macros
+
+Right-click an account › **Macro…**. The editor shows a picture of the
+page: click it where the macro should click (left or right button, single
+or double). Add waits and keys (letters, digits, F1–F12, arrows, Space,
+Enter, Esc…), reorder them and choose how they repeat: how many seconds
+after the last step and how many rounds (0 = until stopped).
+
+- The points are kept as a fraction of the page (e.g. 25% of the width, 50%
+  of the height), so they stay in place if the cell changes size in the
+  grid. If the game itself changes its layout, adjust them ("move").
+- Clicks and keys go straight to the page through the browser's DevTools
+  protocol: the Windows cursor does not move and the page gets regular
+  events (inside iframes too).
+- Start or stop: right-click the account › **Start the macro** / **Stop the
+  macro**. The account shows "⟲ macro" while it runs. The tray icon's menu
+  has **Stop all macros**.
+- The macro stops by itself if the page reloads, the account closes or the
+  group's VPN drops; every start and stop goes to the pages log.
+- The account must have been on screen at least once since it opened
+  (that is how Idlerx knows the page size).
+
 ## Responsible use
 
-Idlerx organizes browser sessions; it **does not automate actions** in games
-or capture credentials. Respect each game's terms of service, including
-about using several accounts.
+Idlerx organizes browser sessions and has macros that repeat clicks and
+keys you set yourself; it does not capture credentials. Many games forbid
+automation and using several accounts: check each game's terms of service
+before using it.
 
 ## Uninstalling
 

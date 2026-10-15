@@ -286,6 +286,12 @@ impl App {
                 }
                 Dialog::ConfirmClear(id)
             }
+            Dialog::Macro(mut st) => {
+                if !self.macro_dialog(ctx, &mut st) {
+                    keep = false;
+                }
+                Dialog::Macro(st)
+            }
             Dialog::ConfirmQuit => {
                 match confirm(
                     ctx,

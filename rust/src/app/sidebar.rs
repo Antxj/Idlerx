@@ -187,6 +187,9 @@ impl App {
     pub(super) fn status_text(&self, id: &str) -> (String, Color32, bool) {
         if let Some(p) = self.panels.get(id) {
             let mut s = metrics::fmt_duration(p.started.elapsed());
+            if self.macro_running(id) {
+                s = format!("⟲ macro · {s}");
+            }
             if let Some(u) = self.metrics.get(id) {
                 s.push_str(" · ");
                 s.push_str(&usage_text(u));
@@ -399,6 +402,20 @@ impl App {
         {
             actions.push(Action::Open(id()));
             actions.push(Action::Expand(id()));
+        }
+        ui.separator();
+        if ui.button(tr!("⟲  Macro…", "⟲  Macro…")).clicked() {
+            actions.push(Action::EditMacro(id()));
+        }
+        if open && a.macro_steps.is_some() {
+            let label = if self.macro_running(&a.id) {
+                tr!("⏹  Parar a macro", "⏹  Stop the macro")
+            } else {
+                tr!("▶  Iniciar a macro", "▶  Start the macro")
+            };
+            if ui.button(label).clicked() {
+                actions.push(Action::ToggleMacro(id()));
+            }
         }
         ui.separator();
         if ui.button(tr!("✏  Editar…", "✏  Edit…")).clicked() {

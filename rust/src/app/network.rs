@@ -117,6 +117,14 @@ impl App {
                 self.tunnels.stop(&gid);
             }
         }
+        // a group's VPN is down: its macros stop (their clicks would go nowhere)
+        for (gid, _) in &wanted {
+            if !self.tunnels.status(gid).up() {
+                for id in self.cfg.accounts_in(Some(gid)) {
+                    self.stop_macro(&id, "a VPN do grupo caiu");
+                }
+            }
+        }
         for (gid, _) in &wanted {
             let epoch = self.tunnels.status(gid).epoch;
             let last = self.vpn_epochs.insert(gid.clone(), epoch).unwrap_or(epoch);

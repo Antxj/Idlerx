@@ -32,6 +32,8 @@ pub struct Account {
     /// (`Config::fps_selected` while selected, `Config::fps_limit`
     /// otherwise); Some(0) = never limited.
     pub fps: Option<u32>,
+    /// Repeated clicks and keys sent to this account's page (see `macros`).
+    pub macro_steps: Option<Macro>,
 }
 
 impl Default for Account {
@@ -49,6 +51,7 @@ impl Default for Account {
             open: false,
             group: None,
             fps: None,
+            macro_steps: None,
         }
     }
 }
@@ -71,6 +74,60 @@ impl Account {
             .as_deref()
             .filter(|u| u.starts_with("http"))
             .unwrap_or(&self.url)
+    }
+}
+
+/// Mouse button of a macro click.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MouseButton {
+    #[default]
+    Left,
+    Right,
+}
+
+/// One step of a macro.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Step {
+    /// Click at a point of the page, as a fraction of its width and height
+    /// (it stays in place when the page changes size).
+    Click {
+        x: f32,
+        y: f32,
+        #[serde(default)]
+        button: MouseButton,
+        #[serde(default)]
+        double: bool,
+    },
+    Wait {
+        secs: f32,
+    },
+    /// A key, by its name in `macros::KEYS`.
+    Key {
+        key: String,
+    },
+}
+
+/// Steps repeated on an account's page (sent straight to the page: the
+/// Windows mouse is not used).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Macro {
+    pub steps: Vec<Step>,
+    /// Pause after the last step before starting over.
+    pub every_secs: f32,
+    /// How many rounds (0 = until stopped).
+    pub times: u32,
+}
+
+impl Default for Macro {
+    fn default() -> Self {
+        Macro {
+            steps: Vec::new(),
+            every_secs: 5.0,
+            times: 0,
+        }
     }
 }
 
