@@ -4,31 +4,23 @@
 
 <h1 align="center">Idlerx</h1>
 
+<p align="center"><b>Todas as suas contas, uma janela só.</b><br>
+Várias contas do mesmo jogo de navegador abertas ao mesmo tempo, cada uma
+isolada, lado a lado, leves, com VPN por grupo e macros.</p>
+
 <p align="center"><a href="README.md">English</a> | <b>Português</b></p>
 
 <p align="center">
-  <a href="https://github.com/Antxj/Idlerx/releases/latest"><img src="https://img.shields.io/github/v/release/Antxj/Idlerx?label=Baixar&style=for-the-badge&color=14b8a6" alt="Baixar a versão mais recente"></a>
+  <a href="https://github.com/Antxj/Idlerx/releases/latest"><img src="https://img.shields.io/github/v/release/Antxj/Idlerx?label=Baixar%20gr%C3%A1tis&style=for-the-badge&color=14b8a6" alt="Baixar a versão mais recente"></a>
 </p>
 
-Aplicativo para Windows que abre **várias contas do mesmo site ou jogo ao
-mesmo tempo**, cada uma **isolada de verdade** (login, cookies, cache e
-armazenamento próprios), organizadas numa única janela: uma por vez ou todas
-lado a lado numa grade. Feito para quem joga jogos idle de navegador com mais
-de uma conta.
-
-**Gratuito e de código aberto** (GPL-3.0). Escrito em **Rust**: um único
-executável, sem instalador.
-
-A interface está em português do Brasil e em inglês, seguindo o idioma do
-Windows (dá para fixar em **Configurações** ⚙ › Idioma).
+<p align="center">
+  Gratuito · Código aberto · Sem anúncios · Sem cadastro · Um único arquivo, sem instalação
+</p>
 
 | Tema escuro | Tema claro |
 |---|---|
 | ![Quatro contas numa grade 2×2, tema escuro](docs/pt-BR/home_dark.png) | ![A mesma grade, tema claro](docs/pt-BR/home_light.png) |
-
-| Formato da grade | Configurações |
-|---|---|
-| ![Seletor do formato da grade](docs/pt-BR/grid_menu.png) | ![Configurações](docs/pt-BR/settings.png) |
 
 <sub>Jogos nas fotos: [A Dark Room](https://github.com/doublespeakgames/adarkroom),
 [Trimps](https://github.com/Trimps/Trimps.github.io) e
@@ -36,255 +28,170 @@ Windows (dá para fixar em **Configurações** ⚙ › Idioma).
 código aberto. Duas contas de "Dark Room" rodam lado a lado, cada uma com o
 próprio progresso.</sub>
 
+## Por que o Idlerx
+
+Jogar com várias contas no navegador costuma ser uma bagunça: abas anônimas,
+perfis do Chrome, uma conta derrubando a outra, o PC pesando. O Idlerx
+resolve isso:
+
+- 🔒 **Cada conta isolada de verdade**: login, cookies e progresso próprios.
+  Entre em várias contas do mesmo jogo ao mesmo tempo, sem uma derrubar a
+  outra.
+- 🪟 **Tudo numa janela**: uma conta por vez ou todas lado a lado, em grade.
+- 🌐 **VPN por grupo**: cada grupo de contas sai pela sua VPN, com kill
+  switch, sem mexer no resto do computador.
+- 🖱️ **Macros que não roubam o seu mouse**: cliques e teclas repetidos na
+  conta, enquanto você usa o PC normalmente.
+- 🍃 **Leve**: os jogos não precisam de 60 quadros por segundo nem de toda a
+  sua memória.
+- 🌙 **Sempre rodando**: minimize ou mande para a bandeja e os jogos
+  continuam.
+
 ## Recursos
 
-- **Isolamento de verdade**: cada conta tem a própria pasta de perfil do
-  navegador. Dá para logar em duas contas do mesmo jogo ao mesmo tempo, sem
-  aba anônima, e uma nunca derruba a outra
-- **Modo econômico** (ligado por padrão): um navegador compartilhado por
-  todas as contas, cada uma no seu perfil, gastando cerca de 40% menos
-  memória. Desligue em **Configurações** para cada conta ter o próprio
-  processo de navegador (se uma travar, as outras seguem funcionando)
+### Contas e organização
+
 - **Uma por vez ou em grade**: grade automática que se ajusta à janela, ou
-  um formato fixo (lado a lado, empilhado, 2×2, 3×2, 3×3… ou quaisquer
-  colunas × linhas). **Arraste uma conta da lista até um quadro** da grade
-  para colocá-la ali; a grade também pode mostrar só um grupo
-- **Grupos** na lista: **clique num grupo para mostrar só as contas dele na
-  grade** (de novo: todas), a seta recolhe/expande, arraste grupos para
-  mudar a ordem, arraste contas para dentro, abra ou pause o grupo inteiro
-  de uma vez. Uma conta nova já pode nascer num grupo (no diálogo de nova
-  conta, ou botão direito no grupo › Nova conta neste grupo)
-- **VPN por grupo** (OpenVPN): escolha um arquivo `.ovpn` no grupo e as
-  contas dele só acessam a internet pela VPN, com **kill switch**: se a VPN
-  cair, elas ficam sem internet até ela voltar, nunca pela sua conexão. O
-  resto do computador e os outros grupos não passam por ela. Detalhes em
-  [VPN dos grupos](#vpn-dos-grupos)
-- **Macro por conta**: cliques, teclas e esperas repetidos na página da
-  conta, sem usar o mouse nem o teclado do Windows (você continua usando o
-  PC normalmente) e funcionando com a conta escondida, minimizada ou na
-  bandeja. Detalhes em [Macros](#macros)
-- **Modo foco** (F11): some com a lista e a barra, fica só o jogo. F11 ou Esc
-  traz tudo de volta
-- **CPU e RAM** de cada conta (na lista e no quadro da grade), de cada
-  grupo (passe o mouse no nome) e o **total** (rodapé da lista; passe o
-  mouse para ver os detalhes). A GPU não é medida
-- **Áudio e zoom por conta**: silencie uma, dê zoom em outra (também com
-  Ctrl+roda do mouse dentro da página). O ícone 🔊 mostra quem está tocando som
-- **Barra de endereço** com voltar, avançar e recarregar: é só colar a URL de
-  qualquer jogo
-- **Favoritar, renomear, reordenar** (arrastando na lista)
-- **Senhas salvas** (ligado por padrão): o navegador oferece salvar o login
-  de cada conta e preenche sozinho na próxima vez. Cada conta tem as
-  próprias, guardadas neste computador e criptografadas pelo Windows, como
-  no Chrome e no Edge (sem sincronização)
-- **Pausar** uma conta fecha a página e libera a memória; ao abrir de novo
-  ela continua logada
-- **Limpar dados** (sair da conta) recomeça a conta do zero, sem removê-la
-- **Reabre as contas** que estavam abertas, no último endereço visitado
-- **Atualizações automáticas** pelo GitHub (detalhes em
-  [Atualizações](#atualizações))
-- **Bandeja do sistema**: o X manda o Idlerx para a bandeja e os jogos
-  continuam rodando (dá para desligar em **Configurações**). Clique no ícone
-  para reabrir; o menu dele abre ou pausa todas as contas e sai do
-  programa. O ícone ganha um ponto vermelho enquanto a VPN de um grupo
-  está fora do ar, e o Windows avisa quando uma VPN cai (depois de 15 s) e
-  quando volta
-- **Instância única**: abrir o executável de novo só traz a janela para a
-  frente (também da bandeja)
+  formato fixo (lado a lado, empilhado, 2×2, 3×2, 3×3… ou quantas colunas e
+  linhas quiser). Arraste uma conta da lista para um quadro da grade.
+- **Grupos**: separe as contas por jogo, servidor ou o que preferir. Clique
+  num grupo para ver só as contas dele na grade; abra ou pause o grupo
+  inteiro de uma vez; arraste contas e grupos para reorganizar.
+- **Modo foco** (F11): só o jogo, sem lista nem barra.
+- **Som e zoom por conta**, barra de endereço, favoritos, renomear,
+  reordenar arrastando.
+- **Senhas salvas por conta**, criptografadas pelo Windows, sem
+  sincronizar com nada.
+- **Pausar** uma conta libera toda a memória dela, e ela continua logada
+  quando você abre de novo.
+- **Reabre tudo como estava**: as contas que estavam abertas voltam no
+  último endereço.
 
-### Economia de recursos
+<p align="center"><img src="docs/pt-BR/grid_menu.png" width="420" alt="Seletor do formato da grade"></p>
 
-- **Limite de quadros por segundo**: jogos idle não precisam desenhar 60
-  (ou 144, 180… a frequência do monitor) vezes por segundo. Por padrão
-  a conta selecionada desenha até 60 FPS e as outras até 30 (os dois valores
-  podem ser mudados nas Configurações); cada conta também pode ter o
-  seu (botão direito › Quadros por segundo), e cada quadro da grade mostra
-  quantos ela realmente desenha. Com quatro páginas animadas na grade,
-  limites de 60 (selecionada) e 15 (outras) levaram a CPU de 25% para 6%
+### VPN por grupo
 
-- O **modo econômico** compartilha os processos de navegador, GPU e rede
-  entre as contas: com 5 contas, 21 processos e ~1,5 GB em vez de 41 e
-  ~2,7 GB. Cada modo guarda os logins separadamente: ao trocar de modo,
-  entre nos jogos de novo uma vez
-- Páginas fora da tela (outra conta selecionada, menu por cima, **janela
-  minimizada**) **param de desenhar** e o WebView2 é instruído a **usar
-  menos memória**, mas o jogo continua rodando. Minimizado, o Idlerx gasta
-  cerca de dez vezes menos CPU
-- "Manter os jogos ativos em segundo plano" (ligado por padrão) impede o
-  navegador de desacelerar os timers de páginas escondidas e mantém os
-  jogos acordados fora da tela: a página escondida acha que continua
-  visível e o loop de desenho dela roda a 5 quadros por segundo, então
-  jogos que rodam a lógica nele (Phaser e a maioria dos jogos em canvas)
-  não congelam nem se pausam sozinhos. Desligue para economizar ainda mais
-  CPU
-- Uma página que trava ou para de responder recarrega sozinha (e a conta
-  abre de novo se o navegador dela fechou), até 3 vezes em 10 minutos
-- A interface só se redesenha quando algo muda (ou 1×/s para os números)
-- **Pausar** contas que você não está usando libera toda a memória delas
+Escolha um arquivo `.ovpn` (OpenVPN) num grupo e as contas dele passam a
+acessar a internet **somente pela VPN**:
 
-## VPN dos grupos
+- **Kill switch**: se a VPN cair, as contas do grupo ficam sem internet até
+  ela voltar. Nunca saem pela sua conexão.
+- **Sem vazamentos**: DNS pela VPN, WebRTC sem revelar o seu IP, IPv6
+  bloqueado. Conferido no browserleaks.com.
+- **O resto do PC não muda**: só o grupo usa a VPN; os outros grupos e os
+  seus outros programas continuam na sua conexão normal.
+- **Uma VPN por grupo, várias ao mesmo tempo.**
+- Login por certificado, usuário e senha ou **token do Google
+  Authenticator** (o código de 6 dígitos é gerado sozinho).
+- O grupo mostra o **IP** que os sites veem e o **download e upload**. Ao
+  abrir o Idlerx, as contas esperam a VPN conectar antes de abrir.
+- O instalador oficial do OpenVPN vem junto: se faltar, é só um clique.
 
-Clique com o botão direito num grupo › **Editar (nome, VPN)…** › marque
-**Usar VPN (OpenVPN) neste grupo** e escolha o arquivo `.ovpn`. Se a VPN
-pedir login, escolha o tipo (usuário e senha, token do Google
-Authenticator ou os dois); a senha e a seed do token ficam neste computador,
-criptografadas pelo Windows.
+Botão direito no grupo › **Editar (nome, VPN)…**
 
-- **Ao abrir o Idlerx**, as contas do grupo esperam a VPN conectar e só
-  então abrem.
-- O **escudo** ao lado do nome do grupo mostra o estado (verde: conectada,
-  amarelo: conectando ou reconectando, vermelho: erro); embaixo do nome
-  aparecem o **IP** que os sites veem e o **download e upload** do grupo.
-  Passe o mouse para ver os totais.
-- **Kill switch**: as páginas do grupo só conseguem sair por um "porteiro"
-  local preso à placa de rede da VPN. Se a VPN cai, ele corta na hora as
-  conexões abertas e recusa as novas; não existe caminho pela sua conexão
-  normal. Quando a VPN volta, as páginas recarregam sozinhas.
-- **Sem vazamentos**: o DNS é resolvido pela VPN, o WebRTC não revela o IP
-  real e o IPv6 fica bloqueado (tudo sai por IPv4 pela VPN). Conferido no
-  browserleaks.com (IP, DNS e WebRTC).
-- **O resto do computador não muda**: o Idlerx ignora as rotas e os DNS que
-  o servidor da VPN manda e adiciona só uma rota pela VPN com a menor
-  prioridade possível, usada apenas pelo porteiro do grupo.
-- Cada grupo pode ter a sua VPN, ao mesmo tempo.
-- No **modo econômico**, as contas de um grupo com VPN usam um navegador só
-  delas (cerca de 300 MB a mais por grupo); ao ligar ou desligar a VPN de
-  um grupo, entre nos jogos de novo uma vez.
+### Macros
 
-Requer o **OpenVPN Community**. Se ele não estiver instalado, o Idlerx
-oferece instalar: o instalador oficial (assinado pela OpenVPN Inc.) vem
-dentro do executável, e o Windows pede permissão de administrador. Na
-primeira conexão o Windows também pode pedir uma vez para autorizar sua
-conta no serviço do OpenVPN; depois disso o Idlerx conecta sem pedir
-permissões. A VPN usa o serviço do próprio OpenVPN, então funciona junto
-com outras VPNs (inclusive o OpenVPN GUI).
+Repita cliques e teclas numa conta, **sem usar o mouse nem o teclado do
+Windows**: você continua usando o computador normalmente, e a macro
+funciona até com a conta escondida, minimizada ou na bandeja.
 
-## Requisitos
+- **Monte clicando numa foto da tela**: clique onde a macro deve clicar.
+  Botão esquerdo ou direito, simples ou duplo.
+- **Teclas e esperas**: letras, números, F1–F12, setas, Espaço, Enter,
+  Esc…
+- **Repetição**: a cada quantos segundos, quantas vezes ou até você parar.
+- **Pontos em proporção da tela**: continuam no lugar se o quadro mudar de
+  tamanho.
+- **Para sozinha** se a página recarregar, a conta fechar ou a VPN cair.
+  E o ícone da bandeja tem **Parar todas as macros**.
 
-- **Windows 10 ou 11**
-- **Microsoft Edge WebView2 Runtime**: já vem no Windows 11 e é instalado
-  pelo Windows Update no Windows 10. Se faltar, o Idlerx mostra um aviso com
-  o link oficial da Microsoft
+Botão direito na conta › **Macro…**
 
-O Idlerx usa o motor do Microsoft Edge (Chromium), então os sites se
-comportam como no Edge ou no Chrome.
+### Leve e sempre rodando
 
-## Como usar
+- **Limite de quadros por segundo**: por padrão 60 na conta selecionada e 30
+  nas outras (ajustável, inclusive por conta). Com quatro jogos animados na
+  grade, a CPU caiu de 25% para 6%.
+- **Modo econômico** (ligado por padrão): as contas compartilham o
+  navegador, com cerca de 40% menos memória.
+- **Fora da tela, sem desperdício**: contas escondidas não desenham e usam
+  menos memória, mas o jogo continua: timers sem desaceleração e o loop do
+  jogo rodando a 5 quadros por segundo. Minimizado, o Idlerx gasta cerca de
+  dez vezes menos CPU.
+- **Bandeja do sistema**: o X manda para a bandeja e os jogos seguem. O
+  ícone fica com um ponto vermelho se a VPN de um grupo cair, e o Windows
+  avisa quando cai e quando volta.
+- **Se recupera sozinho**: uma página que trava recarrega sozinha.
+- **CPU e RAM** de cada conta, de cada grupo e do total, sempre à vista.
+- **Registro das páginas**: quando cada conta carregou, recarregou (e por
+  quê), ficou escondida ou visível. Ótimo para entender o que aconteceu
+  enquanto você estava fora.
 
-1. Baixe o `Idlerx.exe` na página de [Releases](../../releases)
-2. Abra. Na primeira vez, o SmartScreen pode avisar sobre "aplicativo não
-   reconhecido": clique em **Mais informações** › **Executar assim mesmo**
-3. **+ Nova conta**: cole o endereço do jogo e dê um nome (ex.: "Char
-   principal")
-4. Repita para as outras contas e escolha **▣ Uma** ou **⊞ Grade** no canto
-   superior direito
+<p align="center"><img src="docs/pt-BR/settings.png" width="420" alt="Configurações"></p>
 
-Clique com o botão direito numa conta para mais opções (editar, silenciar,
-tirar da grade, limpar dados, remover).
+## Comece em 1 minuto
 
-## Para desenvolvedores
+1. **Baixe** o `Idlerx.exe` na página de [Releases](../../releases/latest).
+2. **Abra**. Na primeira vez, o Windows pode mostrar "aplicativo não
+   reconhecido": clique em **Mais informações** › **Executar assim mesmo**.
+3. **+ Nova conta**: cole o endereço do jogo e dê um nome.
+4. Repita para as outras contas e escolha **Uma** ou **Grade** no canto
+   superior direito.
 
-Requisitos: [Rust](https://rustup.rs) com o toolchain **MSVC** e o Visual
-Studio Build Tools. O toolchain GNU não serve (o loader do WebView2 viraria
-uma DLL separada); se ele estiver ativo, o build para com uma mensagem.
+Botão direito numa conta ou num grupo mostra todas as opções.
 
-```powershell
-cd rust
-rustup override set stable-x86_64-pc-windows-msvc   # só se o MSVC não for o seu padrão
-cargo test
-cargo run
-.\build-release.ps1      # instalador do OpenVPN + testes + release sem caminhos locais + verificações
-```
+**Requisitos:** Windows 10 ou 11. O Idlerx usa o motor do Microsoft Edge
+(WebView2), que já vem no Windows 11 e chega pelo Windows Update no Windows
+10. Os sites funcionam como no Edge ou no Chrome. A interface está em
+português e inglês, seguindo o idioma do Windows.
 
-Estrutura:
+## Perguntas frequentes
 
-- [`main.rs`](rust/src/main.rs): inicialização e janela
-- [`app/`](rust/src/app/mod.rs): interface (egui), dividida em lista
-  lateral, barra superior, grade, diálogos e peças compartilhadas
-- [`panels.rs`](rust/src/panels.rs): uma conta aberta (WebView2 via
-  [webview2-com](https://github.com/wravery/webview2-rs), criado de forma
-  assíncrona): posição, mudo, zoom, navegação
-- [`config.rs`](rust/src/config.rs): contas e configurações (JSON)
-- [`metrics.rs`](rust/src/metrics.rs): CPU e memória por árvore de processos
-- [`i18n.rs`](rust/src/i18n.rs): idioma e as macros `tr!`/`trf!`
-- [`update.rs`](rust/src/update.rs): verificação e instalação de versões novas
-- [`vpn/`](rust/src/vpn/mod.rs): VPN dos grupos: OpenVPN pelo serviço
-  dele, o porteiro (proxy SOCKS5 preso à placa da VPN, kill switch), DNS pelo
-  túnel, instalador embutido
-- [`single.rs`](rust/src/single.rs): instância única
+**É de graça mesmo?**
+Sim, e sempre vai ser: sem anúncios, sem versão paga, sem cadastro. O
+código é aberto (GPL-3.0).
 
-Variáveis úteis para testes:
+**Minhas contas e senhas ficam onde?**
+Só no seu computador. Os logins de cada conta ficam na pasta de perfil
+dela, e as senhas e tokens de VPN são criptografados pelo Windows. Nada vai
+para servidor nenhum.
 
-| Variável | Efeito |
-|---|---|
-| `IDLERX_DATA` | guarda configurações e perfis em outra pasta (não mexe nas contas reais) |
-| `IDLERX_INSTANCE` | separa uma instância de teste do app de uso diário |
-| `IDLERX_LANGUAGE` | força `pt` ou `en` |
-| `IDLERX_UPDATE_URL` | consulta outro endereço em vez da API do GitHub |
-| `IDLERX_SCREENSHOT` | abre numa tela específica para as fotos da documentação: `settings`, `grid-menu`, `group`, `new-account` ou `pointer:x,y` (ponteiro parado ali; `pointer:x,y,right` também clica com o botão direito) , `start-macros` (as macros iniciam sozinhas) ou `macro-editor` |
+**O Idlerx se atualiza sozinho?**
+Ele confere se há versão nova logo ao abrir e depois a cada hora, e mostra
+um aviso discreto. Ao atualizar, o arquivo novo só é aceito se o código de
+verificação (SHA-256) bater com o publicado no GitHub, e o Idlerx reabre
+sozinho com as mesmas contas.
 
-## Onde ficam os dados
+**Por que o Windows avisa na primeira vez?**
+O SmartScreen avisa sobre programas que ainda não são muito baixados. Cada
+versão é gerada direto do código deste repositório, e dá para conferir:
+veja [Segurança](#segurança).
 
-- Configurações e lista de contas: `%APPDATA%\Idlerx\config.json`
-- Registro das páginas: `%APPDATA%\Idlerx\logs\pages.log` (quando cada
-  conta carregou, recarregou e por quê, ficou escondida ou visível;
-  **Configurações** › Registro das páginas)
-- Perfis do navegador (cookies, cache, logins) de cada conta:
-  `%LOCALAPPDATA%\Idlerx\profiles\`
-- VPN dos grupos: `%APPDATA%\Idlerx\vpn\` (cópia de cada `.ovpn`,
-  senhas e seeds criptografadas pelo Windows em `secrets.dat`, logs do
-  OpenVPN em `logs\`)
-
-Os dados das contas **nunca saem do computador**.
-
-## Atualizações
-
-Não há servidor próprio: o app consulta
-`api.github.com/repos/Antxj/Idlerx/releases/latest` logo ao abrir e
-depois a cada hora (dá para desligar em **Configurações**). A
-requisição não envia nenhum dado do usuário.
-
-Quando há versão nova, aparece um link discreto na barra superior. Em
-**Atualizar agora**:
-
-1. o `Idlerx.exe` da release é baixado e só é aceito se tiver exatamente o
-   SHA-256 que o GitHub publica para o arquivo;
-2. se o executável atual for assinado digitalmente, o novo precisa ter
-   assinatura válida **do mesmo editor**;
-3. o executável atual vira `Idlerx.exe.antigo` (apagado na próxima
-   inicialização) e o novo toma o lugar;
-4. o app fecha e a versão nova abre sozinha, com as mesmas contas.
+**Preciso instalar alguma coisa?**
+Não. É um único arquivo. O OpenVPN só é necessário se você usar VPN nos
+grupos, e o próprio Idlerx oferece instalar.
 
 ## Privacidade
 
 O Idlerx não coleta nem envia dados. As únicas conexões são os **sites que
-você abre**, a **verificação de versões** no GitHub (descrita acima) e, nos
-grupos com VPN, o **servidor da sua VPN** e uma consulta a
-`api.ipify.org` **pela própria VPN** a cada conexão, para mostrar o IP que
-os sites veem (e conferir que o túnel funciona antes de liberar as
-páginas).
+você abre**, a **verificação de versão** no GitHub (sem nenhum dado seu) e,
+nos grupos com VPN, o **servidor da sua VPN** e uma consulta a
+`api.ipify.org` **pela própria VPN**, para mostrar o IP que os sites veem.
 
-## Macros
+## Segurança
 
-Botão direito numa conta › **Macro…**. O editor mostra uma foto da página:
-clique nela onde a macro deve clicar (botão esquerdo ou direito, simples ou
-duplo). Adicione esperas e teclas (letras, números, F1–F12, setas, Espaço,
-Enter, Esc…), mude a ordem e escolha a repetição: a cada quantos segundos
-depois do último passo e quantas rodadas (0 = até parar).
+Cada versão é gerada exclusivamente pelo
+[workflow de release](.github/workflows/release.yml) no GitHub Actions, a
+partir do código deste repositório. Para conferir a sua cópia:
 
-- Os pontos são guardados em proporção da página (ex.: 25% da largura, 50%
-  da altura), então continuam no lugar se o quadro mudar de tamanho na
-  grade. Se o próprio jogo mudar de layout, ajuste os pontos ("mover").
-- Cliques e teclas vão direto para a página, pelo protocolo de depuração do
-  navegador: o cursor do Windows não se mexe e a página recebe eventos
-  normais (também dentro de iframes).
-- Iniciar ou parar: botão direito na conta › **Iniciar a macro** / **Parar a
-  macro**. A conta mostra "⟲ macro" enquanto roda. O menu do ícone da
-  bandeja tem **Parar todas as macros**.
-- A macro para sozinha se a página recarregar, a conta fechar ou a VPN do
-  grupo cair; cada início e parada vai para o registro das páginas.
-- A conta precisa ter aparecido na tela pelo menos uma vez desde que abriu
-  (é assim que o Idlerx sabe o tamanho da página).
+```powershell
+Get-FileHash .\Idlerx.exe -Algorithm SHA256
+gh attestation verify .\Idlerx.exe --repo Antxj/Idlerx
+```
+
+Compare o SHA-256 com o mostrado na página de [Releases](../../releases); o
+segundo comando confere o atestado de origem assinado pelo GitHub (requer o
+[GitHub CLI](https://cli.github.com)).
 
 ## Uso responsável
 
@@ -293,30 +200,17 @@ teclas que você mesmo definiu; ele não captura credenciais. Muitos jogos
 proíbem automação e o uso de várias contas: confira os termos de uso de
 cada jogo antes de usar.
 
-## Desinstalar
+## Onde ficam os dados
 
-Feche o app e apague o `Idlerx.exe`. Para remover também as contas e os
-perfis, apague as pastas `%APPDATA%\Idlerx` e `%LOCALAPPDATA%\Idlerx`.
+- Configurações, contas e registro das páginas: `%APPDATA%\Idlerx\`
+- Perfis do navegador (logins, cookies, cache) de cada conta:
+  `%LOCALAPPDATA%\Idlerx\profiles\`
 
-## Conferindo o download
-
-Cada release é gerada exclusivamente pelo
-[workflow de release](.github/workflows/release.yml) no GitHub Actions, a
-partir do código deste repositório. Compare o SHA-256 da sua cópia com o
-mostrado na página de [Releases](../../releases):
-
-```powershell
-Get-FileHash .\Idlerx.exe -Algorithm SHA256
-```
-
-E confira o atestado de origem (assinado pelo GitHub) com o
-[GitHub CLI](https://cli.github.com):
-
-```powershell
-gh attestation verify .\Idlerx.exe --repo Antxj/Idlerx
-```
+**Desinstalar:** feche o Idlerx e apague o `Idlerx.exe`. Para remover também
+as contas, apague as pastas `%APPDATA%\Idlerx` e `%LOCALAPPDATA%\Idlerx`.
 
 ## Licença
 
-[GPL-3.0-or-later](LICENSE). Componentes de terceiros e suas licenças estão
-em [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt).
+Gratuito e de código aberto, sob a [GPL-3.0-or-later](LICENSE). Componentes
+de terceiros e suas licenças estão em
+[THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt).
