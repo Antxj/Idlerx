@@ -42,6 +42,8 @@ computer. Idlerx sorts it out:
   VPN, with a kill switch, without touching the rest of the computer.
 - 🖱️ **Macros that don't take over your mouse**: record by playing and the
   account repeats your clicks and keys while you keep using your PC.
+- 🛡️ **No ads or trackers**: a built-in blocker with the same lists as
+  uBlock Origin, on every account.
 - 🍃 **Lightweight**: games don't need 60 frames a second or all your
   memory.
 - 🌙 **Always running**: minimize it or send it to the tray and the games
@@ -115,6 +117,23 @@ with the account hidden, minimized or in the tray.
 
 Right-click the account › **Record a macro** or **Macro…**
 
+### Ad and tracker blocker
+
+Built in and **on by default for every account**, InPrivate included.
+
+- **The Brave browser's engine** ([adblock-rust](https://github.com/brave/adblock-rust))
+  with **the lists uBlock Origin uses by default**: uBlock filters,
+  EasyList, EasyPrivacy and Peter Lowe's list.
+- **Blocks** ad scripts, trackers and malware, and **hides the spots** where
+  ads would be.
+- **Lists always up to date**: downloaded by themselves and refreshed once
+  a day.
+- **Allowed sites**: a list of sites where nothing is blocked, in case a
+  game complains.
+- Fewer ads also means less CPU, memory and bandwidth used.
+
+Settings › **Block ads and trackers**.
+
 ### Lightweight and always running
 
 - **Frame limit**: 60 FPS on the selected account and 30 on the others by
@@ -184,8 +203,11 @@ groups, and Idlerx offers to install it.
 
 Idlerx does not collect or send any data. Its only connections are the
 **sites you open**, the **version check** on GitHub (with none of your
-data) and, in groups with a VPN, **your VPN server** and one request to
-`api.ipify.org` **through the VPN itself**, to show the IP the sites see.
+data), the daily download of the **ad blocker's lists** (from
+`ublockorigin.github.io`, `easylist.to` and `pgl.yoyo.org`, with none of
+your data; with the blocker off nothing is downloaded) and, in groups with a
+VPN, **your VPN server** and one request to `api.ipify.org` **through the
+VPN itself**, to show the IP the sites see.
 
 ## Security
 

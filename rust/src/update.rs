@@ -582,6 +582,16 @@ fn last_error() -> u32 {
     unsafe { windows_sys::Win32::Foundation::GetLastError() }
 }
 
+/// Downloads a file (up to `limit` bytes) for other parts of the app (the
+/// ad blocker's filter lists). Err = a readable reason.
+pub fn fetch(url: &str, limit: usize) -> Result<Vec<u8>, String> {
+    http_get(url, limit, &mut |_| {}).map_err(|e| match e {
+        HttpError::Network(code) => trf!("sem conexão ({code})", "no connection ({code})"),
+        HttpError::Status(s) => format!("HTTP {s}"),
+        e => e.message(),
+    })
+}
+
 /// Simple GET (follows HTTPS redirects, like the one of the asset
 /// downloads). `progress` receives the bytes read so far.
 fn http_get(

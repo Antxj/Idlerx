@@ -42,6 +42,8 @@ resolve isso:
   switch, sem mexer no resto do computador.
 - 🖱️ **Macros que não roubam o seu mouse**: grave jogando e a conta repete
   seus cliques e teclas enquanto você usa o PC normalmente.
+- 🛡️ **Sem anúncios nem rastreadores**: bloqueador embutido com as mesmas
+  listas do uBlock Origin, em todas as contas.
 - 🍃 **Leve**: os jogos não precisam de 60 quadros por segundo nem de toda a
   sua memória.
 - 🌙 **Sempre rodando**: minimize ou mande para a bandeja e os jogos
@@ -114,6 +116,23 @@ funciona até com a conta escondida, minimizada ou na bandeja.
 
 Botão direito na conta › **Gravar macro** ou **Macro…**
 
+### Bloqueador de anúncios e rastreadores
+
+Embutido e **ligado por padrão em todas as contas**, inclusive InPrivate.
+
+- **Motor do navegador Brave** ([adblock-rust](https://github.com/brave/adblock-rust))
+  com **as listas que o uBlock Origin usa por padrão**: filtros do uBlock,
+  EasyList, EasyPrivacy e a lista de Peter Lowe.
+- **Bloqueia** scripts de anúncio, rastreadores e malware, e **esconde os
+  espaços** onde os anúncios ficariam.
+- **Listas sempre atualizadas**: baixadas sozinhas e renovadas uma vez por
+  dia.
+- **Sites liberados**: uma lista de sites onde nada é bloqueado, para o caso
+  de algum jogo reclamar.
+- Menos anúncios também significa menos CPU, memória e internet gastos.
+
+Configurações › **Bloquear anúncios e rastreadores**.
+
 ### Leve e sempre rodando
 
 - **Limite de quadros por segundo**: por padrão 60 na conta selecionada e 30
@@ -181,9 +200,12 @@ grupos, e o próprio Idlerx oferece instalar.
 ## Privacidade
 
 O Idlerx não coleta nem envia dados. As únicas conexões são os **sites que
-você abre**, a **verificação de versão** no GitHub (sem nenhum dado seu) e,
-nos grupos com VPN, o **servidor da sua VPN** e uma consulta a
-`api.ipify.org` **pela própria VPN**, para mostrar o IP que os sites veem.
+você abre**, a **verificação de versão** no GitHub (sem nenhum dado seu), o
+download diário das **listas do bloqueador de anúncios** (de
+`ublockorigin.github.io`, `easylist.to` e `pgl.yoyo.org`, sem nenhum dado
+seu; desligando o bloqueador, ele não baixa nada) e, nos grupos com VPN, o
+**servidor da sua VPN** e uma consulta a `api.ipify.org` **pela própria
+VPN**, para mostrar o IP que os sites veem.
 
 ## Segurança
 

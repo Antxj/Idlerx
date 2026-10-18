@@ -7,6 +7,7 @@
 #[macro_use]
 mod i18n;
 mod app;
+mod blocker;
 mod config;
 mod events;
 mod macros;

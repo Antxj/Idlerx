@@ -651,6 +651,9 @@ impl App {
             );
 
             ui.add_space(6.0);
+            self.blocker_settings(ui);
+
+            ui.add_space(6.0);
             ui.checkbox(
                 &mut self.cfg.economy,
                 tr!(
@@ -801,6 +804,9 @@ impl App {
             close
         });
 
+        if self.cfg.block_ads != before.block_ads || self.cfg.block_allow != before.block_allow {
+            crate::blocker::configure(self.cfg.block_ads, &self.cfg.block_allow);
+        }
         if self.cfg.language != before.language {
             i18n::apply(
                 self.cfg
@@ -909,4 +915,78 @@ fn confirm(ctx: &egui::Context, title: &str, text: &str, yes: &str) -> Option<bo
         return Some(false);
     }
     modal.inner
+}
+
+impl App {
+    /// Ad blocker part of the settings.
+    fn blocker_settings(&mut self, ui: &mut egui::Ui) {
+        let dark = ui.visuals().dark_mode;
+        ui.checkbox(
+            &mut self.cfg.block_ads,
+            tr!("Bloquear anúncios e rastreadores", "Block ads and trackers"),
+        )
+        .on_hover_text(tr!(
+            "Com o motor do navegador Brave e as listas que o uBlock Origin usa: filtros do              uBlock, EasyList, EasyPrivacy e a lista de Peter Lowe. Vale para todas as contas,              inclusive InPrivate. Ligar ou desligar vale para as contas abertas depois.",
+            "With the Brave browser's engine and the lists uBlock Origin uses: uBlock filters,              EasyList, EasyPrivacy and Peter Lowe's list. Applies to every account, InPrivate              included. Turning it on or off applies to accounts opened afterwards."
+        ));
+        if !self.cfg.block_ads {
+            return;
+        }
+        let st = crate::blocker::status();
+        ui.horizontal(|ui| {
+            let mut line = if st.rules > 0 {
+                trf!(
+                    "{} regras · {} bloqueados nesta sessão",
+                    "{} rules · {} blocked this session",
+                    st.rules,
+                    crate::blocker::blocked()
+                )
+            } else {
+                tr!("Baixando as listas…", "Downloading the lists…").to_string()
+            };
+            if let Some(age) = st.updated.and_then(|t| t.elapsed().ok()) {
+                line.push_str(&trf!(
+                    " · listas de {}",
+                    " · lists from {}",
+                    metrics::fmt_duration(age)
+                ));
+                line.push_str(tr!(" atrás", " ago"));
+            }
+            ui.label(RichText::new(line).small().color(weak(dark)));
+            if st.updating {
+                ui.spinner();
+            } else if ui
+                .small_button(tr!("Atualizar listas", "Update lists"))
+                .clicked()
+            {
+                crate::blocker::refresh_now();
+            }
+        });
+        if let Some(e) = &st.error {
+            ui.label(RichText::new(e).small().color(DANGER));
+        }
+        egui::CollapsingHeader::new(tr!("Sites liberados", "Allowed sites"))
+            .id_salt("block_allow")
+            .show(ui, |ui| {
+                ui.label(
+                    RichText::new(tr!(
+                        "Um por linha (ex.: jogo.com.br): nada é bloqueado nas páginas deles.",
+                        "One per line (e.g. game.com): nothing is blocked on their pages."
+                    ))
+                    .small()
+                    .color(weak(dark)),
+                );
+                let mut text = self.cfg.block_allow.join("\n");
+                if ui
+                    .add(
+                        egui::TextEdit::multiline(&mut text)
+                            .desired_rows(3)
+                            .desired_width(f32::INFINITY),
+                    )
+                    .changed()
+                {
+                    self.cfg.block_allow = text.split('\n').map(String::from).collect();
+                }
+            });
+    }
 }

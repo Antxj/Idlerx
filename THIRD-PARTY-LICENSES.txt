@@ -48,12 +48,16 @@ Rust crates
 -----------
 name version - license - repository
 accesskit v0.24.1 - MIT OR Apache-2.0 - https://github.com/AccessKit/accesskit
+adblock v0.13.3 - MPL-2.0 - https://github.com/brave/adblock-rust/
+addr v0.15.6 - MIT/Apache-2.0 - https://github.com/addr-rs/addr
 adler2 v2.0.1 - 0BSD OR MIT OR Apache-2.0 - https://github.com/oyvindln/adler2
 ahash v0.8.12 - MIT OR Apache-2.0 - https://github.com/tkaitchuck/ahash
+aho-corasick v1.1.5 - Unlicense OR MIT - https://github.com/BurntSushi/aho-corasick
 allocator-api2 v0.2.21 - MIT OR Apache-2.0 - https://github.com/zakarumych/allocator-api2
 arboard v3.6.1 - MIT OR Apache-2.0 - https://github.com/1Password/arboard
 arrayvec v0.7.8 - MIT OR Apache-2.0 - https://github.com/bluss/arrayvec
 base32 v0.5.1 - MIT OR Apache-2.0 - https://github.com/andreasots/base32
+base64 v0.22.1 - MIT OR Apache-2.0 - https://github.com/marshallpierce/rust-base64
 bit-set v0.10.0 - Apache-2.0 OR MIT - https://github.com/contain-rs/bit-set
 bit-vec v0.9.1 - Apache-2.0 OR MIT - https://github.com/contain-rs/bit-vec
 bitflags v2.13.2 - MIT OR Apache-2.0 - https://github.com/bitflags/bitflags
@@ -75,6 +79,7 @@ crypto-common v0.2.2 - MIT OR Apache-2.0 - https://github.com/RustCrypto/traits
 ctutils v0.4.3 - Apache-2.0 OR MIT - https://github.com/RustCrypto/utils
 cursor-icon v1.2.0 - MIT OR Apache-2.0 OR Zlib - https://github.com/rust-windowing/cursor-icon
 digest v0.11.3 - MIT OR Apache-2.0 - https://github.com/RustCrypto/traits
+displaydoc v0.2.7 (proc-macro) - MIT OR Apache-2.0 - https://github.com/yaahc/displaydoc
 document-features v0.2.12 (proc-macro) - MIT OR Apache-2.0 - https://github.com/slint-ui/document-features
 dpi v0.1.2 - Apache-2.0 AND MIT - https://github.com/rust-windowing/winit
 ecolor v0.36.2 - MIT OR Apache-2.0 - https://github.com/emilk/egui
@@ -91,9 +96,11 @@ error-code v3.4.0 - BSL-1.0 - https://github.com/DoumanAsh/error-code
 euclid v0.22.14 - MIT OR Apache-2.0 - https://github.com/servo/euclid
 fdeflate v0.3.7 - MIT OR Apache-2.0 - https://github.com/image-rs/fdeflate
 fearless_simd v0.4.1 - Apache-2.0 OR MIT - https://github.com/linebender/fearless_simd
+flatbuffers v25.12.19 - Apache-2.0 - https://github.com/google/flatbuffers
 flate2 v1.1.10 - MIT OR Apache-2.0 - https://github.com/rust-lang/flate2-rs
 foldhash v0.2.0 - Zlib - https://github.com/orlp/foldhash
 font-types v0.12.6 - MIT OR Apache-2.0 - https://github.com/googlefonts/fontations
+form_urlencoded v1.2.2 - MIT OR Apache-2.0 - https://github.com/servo/rust-url
 getrandom v0.4.3 - MIT OR Apache-2.0 - https://github.com/rust-random/getrandom
 gpu-allocator v0.28.0 - MIT OR Apache-2.0 - https://github.com/Traverse-Research/gpu-allocator
 guillotiere v0.7.0 - MIT/Apache-2.0 - https://github.com/nical/guillotiere
@@ -103,8 +110,18 @@ hashbrown v0.16.1 - MIT OR Apache-2.0 - https://github.com/rust-lang/hashbrown
 hashbrown v0.17.1 - MIT OR Apache-2.0 - https://github.com/rust-lang/hashbrown
 hmac v0.13.0 - MIT OR Apache-2.0 - https://github.com/RustCrypto/MACs
 hybrid-array v0.4.15 - MIT OR Apache-2.0 - https://github.com/RustCrypto/hybrid-array
+icu_collections v2.3.0 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+icu_locale_core v2.3.0 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+icu_normalizer v2.3.0 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+icu_normalizer_data v2.3.0 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+icu_properties v2.3.0 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+icu_properties_data v2.3.0 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+icu_provider v2.3.1 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+idna v1.1.0 - MIT OR Apache-2.0 - https://github.com/servo/rust-url/
+idna_adapter v1.2.2 - Apache-2.0 OR MIT - https://github.com/hsivonen/idna_adapter
 image v0.25.10 - MIT OR Apache-2.0 - https://github.com/image-rs/image
 indexmap v2.14.2 - Apache-2.0 OR MIT - https://github.com/indexmap-rs/indexmap
+itertools v0.14.0 - MIT OR Apache-2.0 - https://github.com/rust-itertools/itertools
 itertools v0.15.0 - MIT OR Apache-2.0 - https://github.com/rust-itertools/itertools
 itoa v1.0.18 - MIT OR Apache-2.0 - https://github.com/dtolnay/itoa
 keyboard-types v0.8.3 - MIT OR Apache-2.0 - https://github.com/rust-windowing/keyboard-types
@@ -113,6 +130,7 @@ libc v0.2.190 - MIT OR Apache-2.0 - https://github.com/rust-lang/libc
 libloading v0.8.9 - ISC - https://github.com/nagisa/rust_libloading/
 libm v0.2.16 - MIT - https://github.com/rust-lang/compiler-builtins
 linebender_resource_handle v0.1.1 - Apache-2.0 OR MIT - https://github.com/linebender/raw_resource_handle
+litemap v0.8.3 - Unicode-3.0 - https://github.com/unicode-org/icu4x
 litrs v1.0.0 - MIT OR Apache-2.0 - https://github.com/LukasKalbertodt/litrs
 lock_api v0.4.14 - MIT OR Apache-2.0 - https://github.com/Amanieu/parking_lot
 log v0.4.34 - MIT OR Apache-2.0 - https://github.com/rust-lang/log
@@ -132,23 +150,32 @@ ordered-float v5.5.0 - MIT - https://github.com/reem/rust-ordered-float
 parking_lot v0.12.5 - MIT OR Apache-2.0 - https://github.com/Amanieu/parking_lot
 parking_lot_core v0.9.12 - MIT OR Apache-2.0 - https://github.com/Amanieu/parking_lot
 peniko v0.6.1 - Apache-2.0 OR MIT - https://github.com/linebender/peniko
+percent-encoding v2.3.2 - MIT OR Apache-2.0 - https://github.com/servo/rust-url/
 pin-project-lite v0.2.17 - Apache-2.0 OR MIT - https://github.com/taiki-e/pin-project-lite
 png v0.18.1 - MIT OR Apache-2.0 - https://github.com/image-rs/image-png
 pollster v1.0.1 - Apache-2.0/MIT - https://github.com/zesterer/pollster
 polycool v0.4.0 - MIT OR Apache-2.0 - https://github.com/linebender/kurbo
+potential_utf v0.1.6 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+precomputed-hash v0.1.1 - MIT - https://github.com/emilio/precomputed-hash
 presser v0.3.1 - MIT OR Apache-2.0 - https://github.com/EmbarkStudios/presser
 proc-macro2 v1.0.107 - MIT OR Apache-2.0 - https://github.com/dtolnay/proc-macro2
 profiling v1.0.18 - MIT OR Apache-2.0 - https://github.com/aclysma/profiling
+psl v2.1.242 - MIT/Apache-2.0 - https://github.com/addr-rs/psl
+psl-types v2.0.11 - MIT/Apache-2.0 - https://github.com/addr-rs/psl-types
 pxfm v0.1.30 - BSD-3-Clause OR Apache-2.0 - https://github.com/awxkee/pxfm
 quote v1.0.47 - MIT OR Apache-2.0 - https://github.com/dtolnay/quote
 range-alloc v0.1.5 - MIT OR Apache-2.0 - https://github.com/gfx-rs/range-alloc
 raw-window-handle v0.6.2 - MIT OR Apache-2.0 OR Zlib - https://github.com/rust-windowing/raw-window-handle
 read-fonts v0.41.0 - MIT OR Apache-2.0 - https://github.com/googlefonts/fontations
+regex v1.13.1 - MIT OR Apache-2.0 - https://github.com/rust-lang/regex
+regex-automata v0.4.18 - MIT OR Apache-2.0 - https://github.com/rust-lang/regex
+regex-syntax v0.8.11 - MIT OR Apache-2.0 - https://github.com/rust-lang/regex
 renderdoc-sys v1.1.0 - MIT OR Apache-2.0 - https://github.com/ebkalderon/renderdoc-rs
 rfd v0.17.2 - MIT - https://github.com/PolyMeilex/rfd
 rustc-hash v1.1.0 - Apache-2.0/MIT - https://github.com/rust-lang-nursery/rustc-hash
 rustc-hash v2.1.3 - Apache-2.0 OR MIT - https://github.com/rust-lang/rustc-hash
 scopeguard v1.2.0 - MIT OR Apache-2.0 - https://github.com/bluss/scopeguard
+seahash v4.1.0 - MIT - https://gitlab.redox-os.org/redox-os/seahash
 self_cell v1.3.0 - Apache-2.0 OR GPL-2.0-only - https://github.com/Voultapher/self_cell
 serde v1.0.229 - MIT OR Apache-2.0 - https://github.com/serde-rs/serde
 serde_core v1.0.229 - MIT OR Apache-2.0 - https://github.com/serde-rs/serde
@@ -160,12 +187,17 @@ skrifa v0.44.0 - MIT OR Apache-2.0 - https://github.com/googlefonts/fontations
 smallvec v1.16.3 - MIT OR Apache-2.0 - https://github.com/servo/rust-smallvec
 smol_str v0.2.2 - MIT OR Apache-2.0 - https://github.com/rust-analyzer/smol_str
 socket2 v0.6.5 - MIT OR Apache-2.0 - https://github.com/rust-lang/socket2
+stable_deref_trait v1.2.1 - MIT OR Apache-2.0 - https://github.com/storyyeller/stable_deref_trait
 static_assertions v1.1.0 - MIT OR Apache-2.0 - https://github.com/nvzqz/static-assertions-rs
 syn v2.0.119 - MIT OR Apache-2.0 - https://github.com/dtolnay/syn
 syn v3.0.7 - MIT OR Apache-2.0 - https://github.com/dtolnay/syn
+synstructure v0.14.0 - MIT - https://github.com/mystor/synstructure
 sysinfo v0.39.6 - MIT - https://github.com/GuillaumeGomez/sysinfo
+thiserror v1.0.69 - MIT OR Apache-2.0 - https://github.com/dtolnay/thiserror
 thiserror v2.0.21 - MIT OR Apache-2.0 - https://github.com/dtolnay/thiserror
+thiserror-impl v1.0.69 (proc-macro) - MIT OR Apache-2.0 - https://github.com/dtolnay/thiserror
 thiserror-impl v2.0.21 (proc-macro) - MIT OR Apache-2.0 - https://github.com/dtolnay/thiserror
+tinystr v0.8.4 - Unicode-3.0 - https://github.com/unicode-org/icu4x
 tracing v0.1.44 - MIT - https://github.com/tokio-rs/tracing
 tracing-core v0.1.36 - MIT - https://github.com/tokio-rs/tracing
 tray-icon v0.26.1 - MIT OR Apache-2.0 - https://github.com/tauri-apps/tray-icon
@@ -175,6 +207,8 @@ unicode-general-category v1.1.0 - Apache-2.0 - https://github.com/yeslogic/unico
 unicode-ident v1.0.26 - (MIT OR Apache-2.0) AND Unicode-3.0 - https://github.com/dtolnay/unicode-ident
 unicode-segmentation v1.13.3 - MIT OR Apache-2.0 - https://github.com/unicode-rs/unicode-segmentation
 unicode-width v0.2.2 - MIT OR Apache-2.0 - https://github.com/unicode-rs/unicode-width
+url v2.5.8 - MIT OR Apache-2.0 - https://github.com/servo/rust-url
+utf8_iter v1.0.4 - Apache-2.0 OR MIT - https://github.com/hsivonen/utf8_iter
 uuid v1.28.0 - Apache-2.0 OR MIT - https://github.com/uuid-rs/uuid
 vello_common v0.1.0 - Apache-2.0 OR MIT - https://github.com/linebender/vello
 vello_cpu v0.1.0 - Apache-2.0 OR MIT - https://github.com/linebender/vello
@@ -208,6 +242,14 @@ windows-threading v0.2.1 - MIT OR Apache-2.0 - https://github.com/microsoft/wind
 windows_x86_64_msvc v0.52.6 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
 windows_x86_64_msvc v0.53.1 - MIT OR Apache-2.0 - https://github.com/microsoft/windows-rs
 winit v0.30.13 - Apache-2.0 - https://github.com/rust-windowing/winit
+writeable v0.6.4 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+yoke v0.8.3 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+yoke-derive v0.8.4 (proc-macro) - Unicode-3.0 - https://github.com/unicode-org/icu4x
 zerocopy v0.8.62 - BSD-2-Clause OR Apache-2.0 OR MIT - https://github.com/google/zerocopy
 zerocopy-derive v0.8.62 (proc-macro) - BSD-2-Clause OR Apache-2.0 OR MIT - https://github.com/google/zerocopy
+zerofrom v0.1.8 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+zerofrom-derive v0.1.8 (proc-macro) - Unicode-3.0 - https://github.com/unicode-org/icu4x
+zerotrie v0.2.5 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+zerovec v0.11.8 - Unicode-3.0 - https://github.com/unicode-org/icu4x
+zerovec-derive v0.11.6 (proc-macro) - Unicode-3.0 - https://github.com/unicode-org/icu4x
 zmij v1.0.23 - MIT - https://github.com/dtolnay/zmij

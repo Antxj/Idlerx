@@ -30,7 +30,7 @@ use webview2_com::{
 };
 use webview2_com::{
     CallDevToolsProtocolMethodCompletedHandler, CapturePreviewCompletedHandler,
-    WebMessageReceivedEventHandler,
+    DOMContentLoadedEventHandler, WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, RECT};
 use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
@@ -404,6 +404,11 @@ impl Panel {
                 Ok(())
             }));
             let _ = webview.add_WebMessageReceived(&messages, &mut token);
+            // ad blocker (see `blocker`): every request of the page, iframes
+            // included, is checked; the blocked ones get an empty answer
+            if crate::blocker::enabled() {
+                watch_requests(&webview, env);
+            }
             let _ = controller.add_GotFocus(&focus_handler, &mut token);
             let _ = controller.add_AcceleratorKeyPressed(&key_handler, &mut token);
 
@@ -879,6 +884,113 @@ impl Panel {
     pub fn take_failure(&self) -> Option<Failure> {
         self.failure.take()
     }
+}
+
+/// Ad blocker: checks the page's requests and hides the ad spots once the
+/// document is loaded.
+unsafe fn watch_requests(webview: &ICoreWebView2, env: &ICoreWebView2Environment) {
+    let mut token = Default::default();
+    let added = webview.cast::<ICoreWebView2_22>().and_then(|w22| {
+        w22.AddWebResourceRequestedFilterWithRequestSourceKinds(
+            &HSTRING::from("*"),
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+            COREWEBVIEW2_WEB_RESOURCE_REQUEST_SOURCE_KINDS_ALL,
+        )
+    });
+    if added.is_err() {
+        let _ = webview.AddWebResourceRequestedFilter(
+            &HSTRING::from("*"),
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL,
+        );
+    }
+    let env = env.clone();
+    let handler = WebResourceRequestedEventHandler::create(Box::new(move |sender, args| {
+        let (Some(sender), Some(args)) = (sender, args) else {
+            return Ok(());
+        };
+        let request = args.Request()?;
+        let mut uri = PWSTR::null();
+        request.Uri(&mut uri)?;
+        let uri = take_pwstr(uri);
+        let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT_OTHER;
+        args.ResourceContext(&mut context)?;
+        let mut source = PWSTR::null();
+        let _ = sender.Source(&mut source);
+        let source = take_pwstr(source);
+        use crate::blocker::Kind;
+        let kind = match context {
+            // the page itself, or a frame inside it
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT if uri == source => Kind::Document,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT => Kind::Subdocument,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_SCRIPT => Kind::Script,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_STYLESHEET => Kind::Stylesheet,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE => Kind::Image,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FONT => Kind::Font,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA => Kind::Media,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST
+            | COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH
+            | COREWEBVIEW2_WEB_RESOURCE_CONTEXT_EVENT_SOURCE => Kind::Xhr,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_WEBSOCKET => Kind::WebSocket,
+            COREWEBVIEW2_WEB_RESOURCE_CONTEXT_PING => Kind::Ping,
+            _ => Kind::Other,
+        };
+        if crate::blocker::check(&uri, &source, kind) {
+            let empty = env.CreateWebResourceResponse(
+                None,
+                403,
+                &HSTRING::from("Blocked"),
+                &HSTRING::from(""),
+            )?;
+            args.SetResponse(&empty)?;
+        }
+        Ok(())
+    }));
+    let _ = webview.add_WebResourceRequested(&handler, &mut token);
+
+    // cosmetic filters: the page's classes and ids go to the engine, which
+    // answers with the CSS hiding the ad spots
+    let Ok(w2) = webview.cast::<ICoreWebView2_2>() else {
+        return;
+    };
+    let loaded = DOMContentLoadedEventHandler::create(Box::new(move |sender, _| {
+        let Some(sender) = sender else { return Ok(()) };
+        let mut source = PWSTR::null();
+        let _ = sender.Source(&mut source);
+        let source = take_pwstr(source);
+        if !source.starts_with("http") {
+            return Ok(());
+        }
+        let page = sender.clone();
+        let collect = "(() => { const c = new Set(), i = new Set();             for (const e of document.querySelectorAll('[class],[id]')) {               if (e.id) i.add(e.id); for (const k of e.classList) c.add(k);               if (c.size + i.size > 8000) break; }             return { c: [...c], i: [...i] }; })()";
+        let done = ExecuteScriptCompletedHandler::create(Box::new(move |_, json| {
+            let v: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+            let list = |k: &str| -> Vec<String> {
+                v[k].as_array()
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|x| x.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            if let Some(css) = crate::blocker::css_for(&source, &list("c"), &list("i")) {
+                let js = format!(
+                    "(() => {{ const s = document.createElement('style'); s.textContent = {};                      (document.head || document.documentElement).appendChild(s); }})()",
+                    serde_json::Value::String(css)
+                );
+                let _ = unsafe {
+                    page.ExecuteScript(
+                        &HSTRING::from(js),
+                        &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
+                    )
+                };
+            }
+            Ok(())
+        }));
+        let _ = unsafe { sender.ExecuteScript(&HSTRING::from(collect), &done) };
+        Ok(())
+    }));
+    let _ = w2.add_DOMContentLoaded(&loaded, &mut token);
 }
 
 /// Page background while it loads (same as the app's panels).

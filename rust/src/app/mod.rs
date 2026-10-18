@@ -269,6 +269,10 @@ impl App {
         let tunnels = vpn::Tunnels::new(Arc::new(move || repaint.request_repaint()));
         let repaint = ctx.clone();
         let tray = tray::Tray::new(move || repaint.request_repaint());
+        // ad blocker: lists loaded and refreshed in the background
+        crate::blocker::configure(cfg.block_ads, &cfg.block_allow);
+        let repaint = ctx.clone();
+        crate::blocker::start(move || repaint.request_repaint());
         let screenshot = std::env::var("IDLERX_SCREENSHOT")
             .ok()
             .filter(|v| !v.is_empty());

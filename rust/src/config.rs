@@ -256,6 +256,10 @@ pub struct Config {
     pub window_maximized: bool,
     /// The X sends the window to the tray (the games keep running).
     pub close_to_tray: bool,
+    /// Built-in ad and tracker blocker (see `blocker`).
+    pub block_ads: bool,
+    /// Sites where nothing is blocked (one host per entry).
+    pub block_allow: Vec<String>,
     /// The "still running in the tray" notice was shown once.
     pub tray_hint_shown: bool,
     /// Profile folders still to be deleted (they were in use).
@@ -284,6 +288,8 @@ impl Default for Config {
             window_size: None,
             window_maximized: true,
             close_to_tray: true,
+            block_ads: true,
+            block_allow: Vec::new(),
             tray_hint_shown: false,
             pending_delete: Vec::new(),
         }
