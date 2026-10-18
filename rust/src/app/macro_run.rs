@@ -81,6 +81,23 @@ impl App {
         if self.screenshot.as_deref() == Some("record-test") {
             self.record_test();
         }
+        // IDLERX_SCREENSHOT=load:<address> (tests): every account goes there
+        // once its page is open
+        if let Some(url) = self
+            .screenshot
+            .as_deref()
+            .and_then(|s| s.strip_prefix("load:"))
+            .map(String::from)
+        {
+            for (id, p) in &self.panels {
+                if p.started.elapsed() > Duration::from_secs(5)
+                    && !self.macro_started_once.contains(id)
+                {
+                    self.macro_started_once.insert(id.clone());
+                    p.load(&format!("{url}#{id}"));
+                }
+            }
+        }
         if self.macro_runs.is_empty() {
             return;
         }

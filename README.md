@@ -64,6 +64,10 @@ computer. Idlerx sorts it out:
   anywhere.
 - **Pause** an account to free all its memory; it is still logged in when
   you open it again.
+- **InPrivate mode**, for a whole group or a single account: the account
+  keeps nothing (cookies, logins, passwords, site data) and always opens on
+  a blank page. Pausing it or closing Idlerx wipes everything. Note: games
+  that save progress in the browser lose it.
 - **Picks up where you left off**: the accounts that were open come back at
   their last address.
 

@@ -34,6 +34,9 @@ pub struct Account {
     pub fps: Option<u32>,
     /// Repeated clicks and keys sent to this account's page (see `macros`).
     pub macro_steps: Option<Macro>,
+    /// InPrivate: nothing is kept (cookies, logins, cache, site data live in
+    /// memory only) and it always opens on a blank page.
+    pub in_private: bool,
 }
 
 impl Default for Account {
@@ -52,6 +55,7 @@ impl Default for Account {
             group: None,
             fps: None,
             macro_steps: None,
+            in_private: false,
         }
     }
 }
@@ -141,6 +145,8 @@ pub struct Group {
     pub collapsed: bool,
     /// The group's accounts go out only through this VPN.
     pub vpn: Option<GroupVpn>,
+    /// Every account of the group is InPrivate (see `Account::in_private`).
+    pub in_private: bool,
 }
 
 impl Group {
@@ -374,6 +380,15 @@ impl Config {
             .position(|a| a.id == target)
             .map_or(self.accounts.len(), |p| p + 1);
         self.accounts.insert(to, acc);
+    }
+
+    /// The account is InPrivate, by itself or through its group.
+    pub fn in_private(&self, a: &Account) -> bool {
+        a.in_private
+            || self
+                .group_of(a)
+                .and_then(|g| self.group(g))
+                .is_some_and(|g| g.in_private)
     }
 
     /// Frames per second an account should draw at (0 = no limit).
@@ -743,6 +758,7 @@ mod tests {
             name: id.into(),
             collapsed: false,
             vpn: None,
+            in_private: false,
         });
     }
 

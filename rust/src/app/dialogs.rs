@@ -154,6 +154,22 @@ impl App {
                         r.request_focus();
                     }
                     ui.add_space(10.0);
+                    ui.checkbox(
+                        &mut st.in_private,
+                        tr!(
+                            "Modo InPrivate: as contas não guardam nada e abrem numa página em branco",
+                            "InPrivate mode: the accounts keep nothing and open on a blank page"
+                        ),
+                    )
+                    .on_hover_text(tr!(
+                        "Cookies, login, senhas e dados dos sites ficam só na memória e somem \
+                         ao pausar a conta ou fechar o Idlerx. Jogos que salvam o progresso no \
+                         navegador perdem esse progresso.",
+                        "Cookies, logins, passwords and site data stay in memory only and are \
+                         gone when the account is paused or Idlerx closes. Games that save \
+                         progress in the browser lose it."
+                    ));
+                    ui.add_space(6.0);
                     ui.separator();
                     network::vpn_section(ui, &mut st.vpn, economy);
                     if let Some(e) = &st.error {
@@ -203,12 +219,25 @@ impl App {
                             gid
                         }
                     };
+                    // InPrivate changed: the group's open accounts start over
+                    let was_private = self.cfg.group(&gid).is_some_and(|g| g.in_private);
+                    if was_private != st.in_private {
+                        if let Some(g) = self.cfg.group_mut(&gid) {
+                            g.in_private = st.in_private;
+                        }
+                        for id in self.cfg.accounts_in(Some(&gid)) {
+                            if let Some(a) = self.cfg.account_mut(&id) {
+                                a.last_url = None;
+                            }
+                            self.restart_account(&id);
+                        }
+                    }
                     match self.save_group_vpn(&gid, &mut st.vpn) {
                         Ok(()) => {
                             if let Some(acc) = st.assign.take() {
-                                let before = self.vpn_of(&acc);
+                                let before = self.browser_key(&acc);
                                 self.cfg.move_to_group(&acc, Some(&gid));
-                                if self.vpn_of(&acc) != before {
+                                if self.browser_key(&acc) != before {
                                     self.restart_account(&acc);
                                 }
                             }

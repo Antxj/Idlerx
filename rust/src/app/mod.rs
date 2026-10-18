@@ -105,6 +105,8 @@ enum Action {
     PauseGroup(String),
     /// Grid shows only this group (None = all accounts).
     GridGroup(Option<String>),
+    /// InPrivate on or off for one account.
+    TogglePrivate(String),
     /// Starts or stops an account's macro.
     ToggleMacro(String),
     /// Opens the macro editor (a picture of the page is taken first).
@@ -139,6 +141,7 @@ struct GroupEdit {
     /// Account that goes into the new group.
     assign: Option<String>,
     vpn: network::VpnEdit,
+    in_private: bool,
     error: Option<String>,
 }
 
@@ -283,6 +286,7 @@ impl App {
                     name: g.name.clone(),
                     assign: None,
                     vpn: network::VpnEdit::of(Some(g)),
+                    in_private: g.in_private,
                     error: None,
                 })
             }),
@@ -466,6 +470,7 @@ impl App {
                     },
                     economy: self.economy,
                     vpn: gate.as_ref().map(|(g, port)| (g.as_str(), *port)),
+                    in_private: self.cfg.in_private(&acc),
                 };
                 let slot = panels::open(
                     self.hwnd,
@@ -541,9 +546,9 @@ impl App {
             Action::AskClear(id) => self.dialog = Some(Dialog::ConfirmClear(id)),
             Action::AskRemove(id) => self.dialog = Some(Dialog::ConfirmRemove(id)),
             Action::MoveTo(id, target) => {
-                let before = self.vpn_of(&id);
+                let before = self.browser_key(&id);
                 self.cfg.move_to(&id, &target);
-                if self.vpn_of(&id) != before {
+                if self.browser_key(&id) != before {
                     self.restart_account(&id);
                 }
                 if let Some(a) = self.cfg.account_mut(&id) {
@@ -554,15 +559,15 @@ impl App {
                 self.mark_dirty();
             }
             Action::Reorder(id, target) => {
-                let before = self.vpn_of(&id);
+                let before = self.browser_key(&id);
                 self.cfg.move_to(&id, &target);
-                if self.vpn_of(&id) != before {
+                if self.browser_key(&id) != before {
                     self.restart_account(&id);
                 }
                 self.mark_dirty();
             }
             Action::PlaceAfter(id, after) => {
-                let before = self.vpn_of(&id);
+                let before = self.browser_key(&id);
                 match &after {
                     Some(t) => self.cfg.move_after(&id, t),
                     None => {
@@ -575,7 +580,7 @@ impl App {
                 if let Some(a) = self.cfg.account_mut(&id) {
                     a.in_grid = true;
                 }
-                if self.vpn_of(&id) != before {
+                if self.browser_key(&id) != before {
                     self.restart_account(&id);
                 }
                 self.request_open(&id);
@@ -583,9 +588,9 @@ impl App {
                 self.mark_dirty();
             }
             Action::MoveToGroup(id, group) => {
-                let before = self.vpn_of(&id);
+                let before = self.browser_key(&id);
                 self.cfg.move_to_group(&id, group.as_deref());
-                if self.vpn_of(&id) != before {
+                if self.browser_key(&id) != before {
                     self.restart_account(&id);
                 }
                 self.mark_dirty();
@@ -596,6 +601,7 @@ impl App {
                     name: String::new(),
                     assign,
                     vpn: network::VpnEdit::default(),
+                    in_private: false,
                     error: None,
                 }))
             }
@@ -606,22 +612,20 @@ impl App {
                         name: g.name.clone(),
                         assign: None,
                         vpn: network::VpnEdit::of(Some(g)),
+                        in_private: g.in_private,
                         error: None,
                     }));
                 }
             }
             Action::DeleteGroup(gid) => {
-                let had_vpn = self
-                    .cfg
-                    .group(&gid)
-                    .is_some_and(|g| g.active_vpn().is_some());
                 let ids = self.cfg.accounts_in(Some(&gid));
+                let before: Vec<_> = ids.iter().map(|id| self.browser_key(id)).collect();
                 self.cfg.delete_group(&gid);
                 self.forget_group_vpn(&gid);
-                if had_vpn {
-                    // its accounts leave the VPN
-                    for id in ids {
-                        self.restart_account(&id);
+                // accounts that leave the group's VPN or InPrivate start over
+                for (id, before) in ids.iter().zip(before) {
+                    if self.browser_key(id) != before {
+                        self.restart_account(id);
                     }
                 }
                 self.mark_dirty();
@@ -641,6 +645,14 @@ impl App {
             }
             Action::EditMacro(id) => self.open_macro_editor(&id),
             Action::RecordMacro(id) => self.start_recording(&id),
+            Action::TogglePrivate(id) => {
+                if let Some(a) = self.cfg.account_mut(&id) {
+                    a.in_private = !a.in_private;
+                    a.last_url = None;
+                    self.mark_dirty();
+                }
+                self.restart_account(&id);
+            }
             Action::StopRecording => self.stop_recording(true),
             Action::ToggleCollapse(gid) => {
                 if let Some(g) = self.cfg.group_mut(&gid) {
@@ -800,10 +812,12 @@ impl App {
             if p.playing_audio() {
                 self.audio.insert(id.clone());
             }
+            let private = self.cfg.account(id).is_some_and(|a| self.cfg.in_private(a));
             let Some(a) = self.cfg.accounts.iter_mut().find(|a| &a.id == id) else {
                 continue;
             };
-            if let Some(u) = p.url().filter(|u| u.starts_with("http")) {
+            // InPrivate: the address is not kept
+            if let Some(u) = p.url().filter(|u| u.starts_with("http") && !private) {
                 if a.last_url.as_deref() != Some(u.as_str()) {
                     a.last_url = Some(u);
                     changed = true;

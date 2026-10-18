@@ -187,6 +187,9 @@ impl App {
     pub(super) fn status_text(&self, id: &str) -> (String, Color32, bool) {
         if let Some(p) = self.panels.get(id) {
             let mut s = metrics::fmt_duration(p.started.elapsed());
+            if self.cfg.account(id).is_some_and(|a| self.cfg.in_private(a)) {
+                s = format!("InPrivate · {s}");
+            }
             if self.recording_on(id) {
                 s = format!("● gravando · {s}");
             } else if self.macro_running(id) {
@@ -404,6 +407,35 @@ impl App {
         {
             actions.push(Action::Open(id()));
             actions.push(Action::Expand(id()));
+        }
+        let by_group = self
+            .cfg
+            .group_of(a)
+            .and_then(|g| self.cfg.group(g))
+            .is_some_and(|g| g.in_private);
+        if by_group {
+            ui.add_enabled(
+                false,
+                egui::Button::new(tr!(
+                    "✔  InPrivate (pelo grupo)",
+                    "✔  InPrivate (by the group)"
+                )),
+            );
+        } else if ui
+            .button(if a.in_private {
+                tr!("✔  InPrivate", "✔  InPrivate")
+            } else {
+                tr!("      InPrivate", "      InPrivate")
+            })
+            .on_hover_text(tr!(
+                "Não guarda nada (cookies, login, senhas, dados do site) e sempre abre numa \
+                 página em branco. Jogos que salvam no navegador perdem o progresso ao fechar.",
+                "Keeps nothing (cookies, logins, passwords, site data) and always opens on a \
+                 blank page. Games that save in the browser lose their progress on close."
+            ))
+            .clicked()
+        {
+            actions.push(Action::TogglePrivate(id()));
         }
         ui.separator();
         if ui.button(tr!("⟲  Macro…", "⟲  Macro…")).clicked() {

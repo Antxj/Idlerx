@@ -61,6 +61,13 @@ impl App {
         g.active_vpn().map(|v| (g.id.clone(), v.clone()))
     }
 
+    /// What the account's browser is started with (VPN of its group,
+    /// InPrivate): when it changes, the account has to open again.
+    pub(super) fn browser_key(&self, id: &str) -> (Option<(String, GroupVpn)>, bool) {
+        let private = self.cfg.account(id).is_some_and(|a| self.cfg.in_private(a));
+        (self.vpn_of(id), private)
+    }
+
     /// The account may open now: no VPN, or its group's VPN is up.
     pub(super) fn network_ready(&self, id: &str) -> bool {
         match self.vpn_of(id) {
@@ -85,7 +92,7 @@ impl App {
         }
         self.note(
             id,
-            "reabrindo: a rede da conta mudou (VPN ligada, desligada ou outro grupo)",
+            "reabrindo: a rede ou o modo da conta mudou (VPN, InPrivate ou outro grupo)",
         );
         self.close_panel(id);
         self.request_open(id);

@@ -116,6 +116,8 @@ pub struct Browser<'a> {
     pub economy: bool,
     /// Group with a VPN: (group id, port of its gate).
     pub vpn: Option<(&'a str, u16)>,
+    /// InPrivate: the page keeps nothing and opens on a blank page.
+    pub in_private: bool,
 }
 
 /// Starts opening an account inside `parent` (the main window). `wake` is
@@ -132,6 +134,7 @@ pub fn open(
         keep_active,
         economy,
         vpn,
+        in_private,
     } = browser;
     let slot: PanelSlot = Rc::new(RefCell::new(None));
     // a browser's arguments (the proxy) are fixed for its whole folder: in
@@ -147,7 +150,13 @@ pub fn open(
     unsafe { options.set_additional_browser_arguments(args) };
 
     let s = slot.clone();
-    let account = account.clone();
+    let mut account = account.clone();
+    // InPrivate: always a fresh start, on a blank page, with nothing saved
+    let save_passwords = save_passwords && !in_private;
+    if in_private {
+        account.url = "about:blank".into();
+        account.last_url = None;
+    }
     let env_done =
         CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |res, env| {
             let env = match res
@@ -189,11 +198,15 @@ pub fn open(
                 },
             ));
             let created = unsafe {
-                if economy {
-                    // the account is a named profile inside the shared browser
+                if economy || in_private {
+                    // economy: the account is a named profile inside the
+                    // shared browser; InPrivate: its data stays in memory
                     env.cast::<ICoreWebView2Environment10>().and_then(|env10| {
                         let opts = env10.CreateCoreWebView2ControllerOptions()?;
                         opts.SetProfileName(&HSTRING::from(profile.as_str()))?;
+                        if in_private {
+                            opts.SetIsInPrivateModeEnabled(true)?;
+                        }
                         env10.CreateCoreWebView2ControllerWithOptions(
                             HWND(parent as _),
                             &opts,

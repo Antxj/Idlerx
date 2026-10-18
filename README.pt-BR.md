@@ -64,6 +64,10 @@ resolve isso:
   sincronizar com nada.
 - **Pausar** uma conta libera toda a memória dela, e ela continua logada
   quando você abre de novo.
+- **Modo InPrivate**, num grupo inteiro ou numa conta avulsa: a conta não
+  guarda nada (cookies, login, senhas, dados do site) e sempre abre numa
+  página em branco. Ao pausar ou fechar o Idlerx, tudo some. Atenção: jogos
+  que salvam o progresso no navegador perdem esse progresso.
 - **Reabre tudo como estava**: as contas que estavam abertas voltam no
   último endereço.
 
