@@ -831,16 +831,10 @@ impl App {
                 actions.push(Action::RetryVpn(g.id.clone()));
             }
             if ui
-                .button(
-                    RichText::new(tr!(
-                        "🗑  Excluir grupo (as contas ficam)",
-                        "🗑  Delete group (accounts stay)"
-                    ))
-                    .color(DANGER),
-                )
+                .button(RichText::new(tr!("🗑  Excluir grupo…", "🗑  Delete group…")).color(DANGER))
                 .clicked()
             {
-                actions.push(Action::DeleteGroup(g.id.clone()));
+                actions.push(Action::AskDeleteGroup(g.id.clone()));
             }
         });
     }

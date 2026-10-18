@@ -321,6 +321,86 @@ impl App {
                 }
                 Dialog::Macro(st)
             }
+            Dialog::ConfirmDeleteGroup(gid, mut with_accounts) => {
+                let name = self
+                    .cfg
+                    .group(&gid)
+                    .map(|g| g.name.clone())
+                    .unwrap_or_default();
+                let ids = self.cfg.accounts_in(Some(&gid));
+                let modal = egui::Modal::new(egui::Id::new("delete_group")).show(ctx, |ui| {
+                    ui.set_width(420.0);
+                    ui.heading(trf!(
+                        "Excluir o grupo \"{name}\"?",
+                        "Delete the \"{name}\" group?"
+                    ));
+                    ui.add_space(6.0);
+                    if ids.is_empty() {
+                        ui.label(tr!("O grupo está vazio.", "The group is empty."));
+                    } else {
+                        ui.checkbox(
+                            &mut with_accounts,
+                            trf!(
+                                "Excluir também as {} conta(s) deste grupo",
+                                "Also delete the {} account(s) in this group",
+                                ids.len()
+                            ),
+                        );
+                        let text = if with_accounts {
+                            RichText::new(tr!(
+                                "As contas saem da lista e os dados delas neste computador \
+                                 (login, cookies, cache) são apagados.",
+                                "The accounts leave the list and their data on this computer \
+                                 (login, cookies, cache) is deleted."
+                            ))
+                            .color(DANGER)
+                        } else {
+                            RichText::new(tr!(
+                                "As contas ficam na lista, sem grupo.",
+                                "The accounts stay in the list, without a group."
+                            ))
+                        };
+                        ui.label(text);
+                    }
+                    ui.add_space(10.0);
+                    let mut r = None;
+                    ui.horizontal(|ui| {
+                        let yes = if with_accounts {
+                            tr!("Excluir grupo e contas", "Delete group and accounts")
+                        } else {
+                            tr!("Excluir grupo", "Delete group")
+                        };
+                        if ui
+                            .add(
+                                egui::Button::new(RichText::new(yes).color(Color32::WHITE))
+                                    .fill(DANGER),
+                            )
+                            .clicked()
+                        {
+                            r = Some(true);
+                        }
+                        if ui.button(tr!("Cancelar", "Cancel")).clicked() {
+                            r = Some(false);
+                        }
+                    });
+                    r
+                });
+                match modal.inner {
+                    Some(true) => {
+                        if with_accounts {
+                            for id in &ids {
+                                self.remove_account(id);
+                            }
+                        }
+                        actions.push(Action::DeleteGroup(gid.clone()));
+                        keep = false;
+                    }
+                    Some(false) => keep = false,
+                    None if modal.should_close() => keep = false,
+                    None => {}
+                }
+                Dialog::ConfirmDeleteGroup(gid, with_accounts)
+            }
             Dialog::ConfirmQuit => {
                 match confirm(
                     ctx,

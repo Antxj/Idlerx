@@ -94,6 +94,8 @@ enum Action {
     NewGroup(Option<String>),
     RenameGroup(String),
     DeleteGroup(String),
+    /// Asks before deleting a group (and, if chosen, its accounts).
+    AskDeleteGroup(String),
     /// Moves the first group to the place of the second one.
     ReorderGroup(String, String),
     /// Moves a group one place up (-1) or down (+1).
@@ -153,6 +155,8 @@ enum Dialog {
     ConfirmRemove(String),
     ConfirmClear(String),
     ConfirmQuit,
+    /// Group to delete, and whether its accounts go too.
+    ConfirmDeleteGroup(String, bool),
     Macro(macro_edit::MacroEdit),
 }
 
@@ -270,6 +274,11 @@ impl App {
             .filter(|v| !v.is_empty());
         let dialog = match screenshot.as_deref() {
             Some("settings") => Some(Dialog::Settings),
+            // confirmation to delete the first group
+            Some("delete-group") => cfg
+                .groups
+                .first()
+                .map(|g| Dialog::ConfirmDeleteGroup(g.id.clone(), true)),
             // new account, already in the first group
             Some("new-account") => Some(Dialog::Edit(EditState {
                 id: None,
@@ -616,6 +625,9 @@ impl App {
                         error: None,
                     }));
                 }
+            }
+            Action::AskDeleteGroup(gid) => {
+                self.dialog = Some(Dialog::ConfirmDeleteGroup(gid, false));
             }
             Action::DeleteGroup(gid) => {
                 let ids = self.cfg.accounts_in(Some(&gid));
