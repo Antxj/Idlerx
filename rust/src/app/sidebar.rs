@@ -192,6 +192,13 @@ impl App {
             }
             if self.recording_on(id) {
                 s = format!("● gravando · {s}");
+            } else if let Some(left) = self.macro_next_in(id) {
+                let t = left.as_secs();
+                let clock = match t / 3600 {
+                    0 => format!("{}:{:02}", t / 60, t % 60),
+                    h => format!("{h}:{:02}:{:02}", t / 60 % 60, t % 60),
+                };
+                s = format!("{} {clock} · {s}", tr!("⟲ próxima em", "⟲ next in"));
             } else if self.macro_running(id) {
                 s = format!("⟲ macro · {s}");
             }

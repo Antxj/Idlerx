@@ -108,8 +108,9 @@ with the account hidden, minimized or in the tray.
 - **Or build it on a picture of the page**: click where the macro should
   click. Left or right button, single or double.
 - **Keys and waits**: letters, digits, F1–F12, arrows, Space, Enter, Esc…
-- **Repetition**: every so many seconds, a number of times or until you
-  stop it.
+- **Repetition**: every so many seconds, minutes or hours ("50 min",
+  "1h30"), a number of times or until you stop it. The account's line in
+  the list counts down to the next click.
 - **Points relative to the page**: they stay in place if the cell changes
   size.
 - **Stops by itself** if the page reloads, the account closes or the VPN

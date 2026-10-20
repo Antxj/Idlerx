@@ -175,6 +175,106 @@ impl Run {
         }
         (out, Some(self.next))
     }
+
+    /// When the next click or key will be sent (None = no more: the
+    /// macro has no click or key, or it ends first).
+    pub fn next_input(&self, m: &Macro) -> Option<Instant> {
+        let len = m.steps.len();
+        if !m.steps.iter().any(|s| !matches!(s, Step::Wait { .. })) {
+            return None;
+        }
+        let (mut t, mut i, mut rounds) = (self.next, self.step.min(len - 1), self.rounds);
+        // at most one full round and a bit
+        for _ in 0..=len * 2 {
+            let Step::Wait { secs } = &m.steps[i] else {
+                return Some(t);
+            };
+            // as `tick` does: after a step, its wait; after the last one,
+            // at least the pause between rounds
+            let at = t;
+            t = at + Duration::from_secs_f32(secs.max(0.0));
+            i += 1;
+            if i >= len {
+                i = 0;
+                rounds += 1;
+                if m.times > 0 && rounds >= m.times {
+                    return None;
+                }
+                t = t.max(at + Duration::from_secs_f32(m.every_secs.max(0.0)));
+            }
+        }
+        None
+    }
+}
+
+/// A time span in seconds as people say it: "1.5 s", "50 min",
+/// "1 h 30 min", "2 min 5 s".
+pub fn fmt_secs(secs: f64) -> String {
+    if secs < 60.0 {
+        let r = (secs * 10.0).round() / 10.0;
+        return if r.fract() == 0.0 {
+            format!("{r:.0} s")
+        } else {
+            format!("{r:.1} s")
+        };
+    }
+    let total = secs.round() as u64;
+    let (h, m, s) = (total / 3600, total / 60 % 60, total % 60);
+    let mut parts = Vec::new();
+    if h > 0 {
+        parts.push(format!("{h} h"));
+    }
+    if m > 0 {
+        parts.push(format!("{m} min"));
+    }
+    if s > 0 {
+        parts.push(format!("{s} s"));
+    }
+    parts.join(" ")
+}
+
+/// Reads what was typed in a time field: a plain number is seconds; with
+/// units, any mix of hours, minutes and seconds ("50m", "50 min",
+/// "1h30", "1h 30m 5s", "2,5 s"). A number after hours without a unit
+/// means minutes ("1h30").
+pub fn parse_secs(text: &str) -> Option<f64> {
+    let t = text.trim().to_lowercase().replace(',', ".");
+    if t.is_empty() {
+        return None;
+    }
+    if let Ok(v) = t.parse::<f64>() {
+        return Some(v);
+    }
+    let mut total = 0.0;
+    let mut last_unit = 0.0;
+    let mut rest = t.as_str();
+    while !rest.is_empty() {
+        rest = rest.trim_start();
+        let end = rest
+            .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+            .unwrap_or(rest.len());
+        if end == 0 {
+            return None;
+        }
+        let num: f64 = rest[..end].parse().ok()?;
+        rest = rest[end..].trim_start();
+        let uend = rest
+            .find(|c: char| !c.is_alphabetic())
+            .unwrap_or(rest.len());
+        let unit = match &rest[..uend] {
+            "h" | "hr" | "hora" | "horas" | "hour" | "hours" => 3600.0,
+            "m" | "min" | "mins" | "minuto" | "minutos" | "minute" | "minutes" => 60.0,
+            "s" | "seg" | "sec" | "secs" | "segundo" | "segundos" | "second" | "seconds" => 1.0,
+            // no unit: the one after the previous ("1h30" = 1 h 30 min)
+            "" if last_unit == 3600.0 => 60.0,
+            "" if last_unit == 60.0 => 1.0,
+            _ => return None,
+        };
+        rest = &rest[uend..];
+        total += num * unit;
+        last_unit = unit;
+    }
+    Some(total)
 }
 
 /// Turns what the page reported while recording into steps: clicks, keys,
@@ -248,6 +348,49 @@ impl Recorder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn time_text() {
+        assert_eq!(fmt_secs(3000.0), "50 min");
+        assert_eq!(fmt_secs(5400.0), "1 h 30 min");
+        assert_eq!(fmt_secs(125.0), "2 min 5 s");
+        assert_eq!(fmt_secs(1.5), "1.5 s");
+        assert_eq!(fmt_secs(5.0), "5 s");
+        assert_eq!(parse_secs("3000"), Some(3000.0));
+        assert_eq!(parse_secs("50m"), Some(3000.0));
+        assert_eq!(parse_secs("50 min"), Some(3000.0));
+        assert_eq!(parse_secs("1h30"), Some(5400.0));
+        assert_eq!(parse_secs("1 h 30 min"), Some(5400.0));
+        assert_eq!(parse_secs("1h 30m 5s"), Some(5405.0));
+        assert_eq!(parse_secs("2,5 s"), Some(2.5));
+        assert_eq!(parse_secs("abc"), None);
+        for v in [0.5, 7.0, 3000.0, 5405.0, 86_400.0] {
+            assert_eq!(parse_secs(&fmt_secs(v)), Some(v));
+        }
+    }
+
+    #[test]
+    fn next_input_time() {
+        let t0 = Instant::now();
+        let m = Macro {
+            steps: vec![click(0.5), Step::Wait { secs: 10.0 }],
+            every_secs: 3000.0,
+            times: 0,
+        };
+        let mut run = Run::new(t0);
+        assert_eq!(run.next_input(&m), Some(t0));
+        run.tick(&m, t0); // the click
+        let later = t0 + INPUT_GAP;
+        // the wait ends the round: then the pause between rounds
+        assert_eq!(run.next_input(&m), Some(later + Duration::from_secs(3000)));
+        let once = Macro {
+            times: 1,
+            ..m.clone()
+        };
+        let mut run = Run::new(t0);
+        run.tick(&once, t0);
+        assert_eq!(run.next_input(&once), None);
+    }
 
     fn click(x: f32) -> Step {
         Step::Click {

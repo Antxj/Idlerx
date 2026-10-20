@@ -10,6 +10,19 @@ impl App {
         self.macro_runs.contains_key(id)
     }
 
+    /// Time left until the running macro of the account sends its next
+    /// click or key (shown in the account's status).
+    pub(super) fn macro_next_in(&self, id: &str) -> Option<Duration> {
+        let run = self.macro_runs.get(id)?;
+        let m = self.cfg.account(id)?.macro_steps.as_ref()?;
+        let at = run.next_input(m)?;
+        // rounded up: "0:00" only when it is happening
+        let left = at.saturating_duration_since(Instant::now());
+        Some(Duration::from_secs(
+            left.as_secs() + u64::from(left.subsec_nanos() > 0),
+        ))
+    }
+
     pub(super) fn start_macro(&mut self, id: &str) {
         let has_steps = self
             .cfg
@@ -100,6 +113,10 @@ impl App {
         }
         if self.macro_runs.is_empty() {
             return;
+        }
+        // the countdown in the list ticks every second while it is seen
+        if !ctx.input(|i| i.viewport().minimized.unwrap_or(false)) {
+            ctx.request_repaint_after(Duration::from_secs(1));
         }
         let now = Instant::now();
         let mut soonest: Option<Instant> = None;

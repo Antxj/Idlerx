@@ -108,7 +108,9 @@ funciona até com a conta escondida, minimizada ou na bandeja.
   esquerdo ou direito, simples ou duplo.
 - **Teclas e esperas**: letras, números, F1–F12, setas, Espaço, Enter,
   Esc…
-- **Repetição**: a cada quantos segundos, quantas vezes ou até você parar.
+- **Repetição**: a cada quantos segundos, minutos ou horas ("50 min",
+  "1h30"), quantas vezes ou até você parar. A linha da conta na lista
+  mostra quanto falta para o próximo clique.
 - **Pontos em proporção da tela**: continuam no lugar se o quadro mudar de
   tamanho.
 - **Para sozinha** se a página recarregar, a conta fechar ou a VPN cair.

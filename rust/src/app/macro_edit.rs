@@ -197,12 +197,7 @@ impl App {
             ui.separator();
             ui.horizontal(|ui| {
                 ui.label(tr!("Repetir a cada", "Repeat every"));
-                ui.add(
-                    egui::DragValue::new(&mut st.m.every_secs)
-                        .range(0.0..=86_400.0)
-                        .speed(0.5)
-                        .suffix(" s"),
-                );
+                ui.add(time_field(&mut st.m.every_secs, 0.0));
                 ui.label(tr!(
                     "depois do último passo · rodadas:",
                     "after the last step · rounds:"
@@ -433,12 +428,7 @@ fn steps_list(ui: &mut egui::Ui, st: &mut MacroEdit) {
                         }
                         Step::Wait { secs } => {
                             ui.label(tr!("Esperar", "Wait"));
-                            ui.add(
-                                egui::DragValue::new(secs)
-                                    .range(0.1..=86_400.0)
-                                    .speed(0.1)
-                                    .suffix(" s"),
-                            );
+                            ui.add(time_field(secs, 0.1));
                         }
                         Step::Key { key } => {
                             ui.label(tr!("Tecla", "Key"));
@@ -479,5 +469,30 @@ fn steps_list(ui: &mut egui::Ui, st: &mut MacroEdit) {
     if let Some(i) = remove {
         st.m.steps.remove(i);
         st.moving = None;
+    }
+}
+
+/// A time field in seconds that shows and takes minutes and hours too
+/// ("50 min", "1h30", "90 s"; a plain number is seconds).
+fn time_field(secs: &mut f32, min: f32) -> impl egui::Widget + '_ {
+    move |ui: &mut egui::Ui| {
+        let speed = if *secs >= 600.0 {
+            10.0
+        } else if *secs >= 60.0 {
+            1.0
+        } else {
+            0.1
+        };
+        ui.add(
+            egui::DragValue::new(secs)
+                .range(min..=86_400.0)
+                .speed(speed)
+                .custom_formatter(|v, _| macros::fmt_secs(v))
+                .custom_parser(macros::parse_secs),
+        )
+        .on_hover_text(tr!(
+            "Clique para digitar: 90 s, 50 min, 1h30, 2 h…",
+            "Click to type: 90 s, 50 min, 1h30, 2 h…"
+        ))
     }
 }
