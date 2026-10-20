@@ -161,6 +161,27 @@ pub fn popup_blocked(target: &str, source: &str, user_initiated: bool) -> bool {
     if !enabled() || allowed(source, &allow_list()) {
         return false;
     }
+    if popup_ad(target, source) {
+        return true;
+    }
+    // a window nobody asked for is never wanted in a game
+    if !user_initiated {
+        shared().blocked.fetch_add(1, Ordering::Relaxed);
+    }
+    !user_initiated
+}
+
+/// A pop-up window (opened by the page `source`) goes to `target`: whether
+/// that is an ad. Checked on each address the window loads, since pop-ups
+/// often open blank and only then go to the ad. Counts it when so.
+pub fn popup_navigation_blocked(target: &str, source: &str) -> bool {
+    enabled() && !allowed(source, &allow_list()) && popup_ad(target, source)
+}
+
+fn popup_ad(target: &str, source: &str) -> bool {
+    if !target.starts_with("http") {
+        return false;
+    }
     let rules = shared()
         .popups
         .read()
@@ -170,23 +191,16 @@ pub fn popup_blocked(target: &str, source: &str, user_initiated: bool) -> bool {
     // that change all the time: those addresses are checked too
     let mut urls = vec![target.to_string()];
     urls.extend(embedded_urls(target));
-    let listed = urls
+    if urls
         .iter()
-        .any(|u| u.starts_with("http") && rules.matches(u));
-    // the engine counts what it blocks itself
-    if !listed
-        && urls
-            .iter()
-            .any(|u| should_block(u, source, Kind::Subdocument, &allow_list()))
+        .any(|u| u.starts_with("http") && rules.matches(u))
     {
+        shared().blocked.fetch_add(1, Ordering::Relaxed);
         return true;
     }
-    // a window nobody asked for is never wanted in a game
-    let block = listed || !user_initiated;
-    if block {
-        shared().blocked.fetch_add(1, Ordering::Relaxed);
-    }
-    block
+    // the engine counts what it blocks itself
+    urls.iter()
+        .any(|u| should_block(u, source, Kind::Subdocument, &allow_list()))
 }
 
 /// Addresses carried inside an address: as a parameter (`?url=https%3A…`)

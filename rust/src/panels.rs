@@ -908,11 +908,16 @@ fn evaluate(
     };
 }
 
-unsafe fn watch_requests(webview: &ICoreWebView2, env: &ICoreWebView2Environment, name: &str) {
+pub(crate) unsafe fn watch_requests(
+    webview: &ICoreWebView2,
+    env: &ICoreWebView2Environment,
+    name: &str,
+) {
     let mut token = Default::default();
     // pop-ups: the engine has no `$popup` rules, so each new window is
     // checked here; a blocked one is simply not opened
     let account = name.to_string();
+    let popup_env = env.clone();
     let popups = NewWindowRequestedEventHandler::create(Box::new(move |sender, args| {
         let (Some(sender), Some(args)) = (sender, args) else {
             return Ok(());
@@ -932,6 +937,9 @@ unsafe fn watch_requests(webview: &ICoreWebView2, env: &ICoreWebView2Environment
                 &account,
                 &format!("janela de propaganda bloqueada: {shown}"),
             );
+        } else if let Err(e) = crate::popup::open(&sender, &popup_env, &args, &account) {
+            // WebView2 opens it as before
+            crate::events::log(&account, &format!("janela nova sem controle: {e}"));
         }
         Ok(())
     }));

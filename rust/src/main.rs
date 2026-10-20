@@ -13,6 +13,7 @@ mod events;
 mod macros;
 mod metrics;
 mod panels;
+mod popup;
 mod single;
 mod tray;
 mod update;
