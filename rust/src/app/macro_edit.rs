@@ -251,13 +251,24 @@ impl App {
         }
         if save {
             let m = (!st.m.steps.is_empty()).then(|| st.m.clone());
+            let old = self.cfg.account(&st.id).and_then(|a| a.macro_steps.clone());
             if let Some(a) = self.cfg.account_mut(&st.id) {
-                a.macro_steps = m;
+                a.macro_steps = m.clone();
             }
             self.mark_dirty();
-            self.stop_macro(&st.id, "macro editada");
-            if start {
-                self.start_macro(&st.id);
+            match (start, m, old, self.macro_runs.get_mut(&st.id)) {
+                // just "Save": a running macro goes on where it was, with
+                // the new steps and times
+                (false, Some(new), Some(old), Some(run)) => {
+                    run.edited(&old, &new, Instant::now());
+                    self.note(&st.id, "macro editada (continua rodando)");
+                }
+                _ => {
+                    self.stop_macro(&st.id, "macro editada");
+                    if start {
+                        self.start_macro(&st.id);
+                    }
+                }
             }
             keep = false;
         }

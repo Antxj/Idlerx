@@ -166,9 +166,19 @@ pub fn popup_blocked(target: &str, source: &str, user_initiated: bool) -> bool {
         .read()
         .unwrap_or_else(|e| e.into_inner())
         .clone();
-    let listed = target.starts_with("http") && rules.matches(target);
+    // pop-up networks hide the ad's address inside their own, on domains
+    // that change all the time: those addresses are checked too
+    let mut urls = vec![target.to_string()];
+    urls.extend(embedded_urls(target));
+    let listed = urls
+        .iter()
+        .any(|u| u.starts_with("http") && rules.matches(u));
     // the engine counts what it blocks itself
-    if !listed && should_block(target, source, Kind::Subdocument, &allow_list()) {
+    if !listed
+        && urls
+            .iter()
+            .any(|u| should_block(u, source, Kind::Subdocument, &allow_list()))
+    {
         return true;
     }
     // a window nobody asked for is never wanted in a game
@@ -177,6 +187,83 @@ pub fn popup_blocked(target: &str, source: &str, user_initiated: bool) -> bool {
         shared().blocked.fetch_add(1, Ordering::Relaxed);
     }
     block
+}
+
+/// Addresses carried inside an address: as a parameter (`?url=https%3A…`)
+/// or a path piece encoded in base64 (`/_x/aHR0cHM6Ly…`), two levels deep.
+fn embedded_urls(url: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut todo = vec![url.to_string()];
+    for _ in 0..2 {
+        let mut next = Vec::new();
+        for u in &todo {
+            let rest = u.split_once("://").map_or(u.as_str(), |(_, r)| r);
+            for piece in rest.split(['/', '?', '&', '=', '#']).skip(1) {
+                let text = percent_decode(piece);
+                let inner = if text.starts_with("http://") || text.starts_with("https://") {
+                    Some(text)
+                } else if piece.len() >= 16 {
+                    base64_decode(piece).filter(|t| t.starts_with("http"))
+                } else {
+                    None
+                };
+                if let Some(inner) = inner.filter(|i| !found.contains(i)) {
+                    found.push(inner.clone());
+                    next.push(inner);
+                }
+            }
+        }
+        todo = next;
+    }
+    found
+}
+
+fn percent_decode(text: &str) -> String {
+    let b = text.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16);
+        match (
+            b[i],
+            b.get(i + 1).and_then(|c| hex(*c)),
+            b.get(i + 2).and_then(|c| hex(*c)),
+        ) {
+            (b'%', Some(h), Some(l)) => {
+                out.push((h * 16 + l) as u8);
+                i += 3;
+            }
+            (c, _, _) => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Base64 (standard or URL-safe, padding optional) into text; None if it
+/// is not base64 or not text.
+fn base64_decode(text: &str) -> Option<String> {
+    let mut out = Vec::new();
+    let (mut acc, mut bits) = (0u32, 0);
+    for c in text.trim_end_matches('=').bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            _ => return None,
+        };
+        acc = (acc << 6) | v as u32;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    String::from_utf8(out).ok()
 }
 
 /// `cosmetic_css` with the app's settings.
@@ -498,6 +585,28 @@ mod tests {
         assert!(!r.matches("https://a.b/earn.php?ad=1&z=5"));
         assert!(!r.matches("https://net.example/"));
         assert!(!r.matches("https://accounts.google.com/o/oauth2"));
+    }
+
+    #[test]
+    fn hidden_addresses() {
+        // a pop-up network's address carrying the ad's one in base64
+        let popup = "http://lremsteo.net/_x/aHR0cHM6Ly9wdC5wb3JuaHViLmNvbS9feGEvYWRzP3pvbmVfaWQ9MTk4NDI2MSZyZWRpcmVjdD0xJmZvcm1hdD1wb3B1bmRlcg";
+        let urls = embedded_urls(popup);
+        assert_eq!(
+            urls,
+            vec!["https://pt.pornhub.com/_xa/ads?zone_id=1984261&redirect=1&format=popunder"]
+        );
+        let mut r = PopupRules::default();
+        PopupRules::parse("/_xa/ads?$popup", &mut r);
+        assert!(!r.matches(popup));
+        assert!(r.matches(&urls[0]));
+        assert_eq!(
+            embedded_urls("https://r.example/go?u=https%3A%2F%2Fads.example%2Fx&b=1"),
+            vec!["https://ads.example/x"]
+        );
+        // ordinary addresses carry nothing
+        assert!(embedded_urls("https://accounts.google.com/o/oauth2/v2/auth?client_id=123abcdefghijklmnop&redirect_uri=https%3A%2F%2Fgame.example%2Fcb").len() == 1);
+        assert!(embedded_urls("https://game.example/play/level-12345678901234567890").is_empty());
     }
 
     #[test]

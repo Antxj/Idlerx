@@ -176,6 +176,26 @@ impl Run {
         (out, Some(self.next))
     }
 
+    /// The macro was changed while running: it goes on from the same step
+    /// (from the start of the next round if that step is gone), and a
+    /// change of the pause between rounds counts for the pause going on.
+    pub fn edited(&mut self, old: &Macro, new: &Macro, now: Instant) {
+        if self.step >= new.steps.len() {
+            self.step = 0;
+            self.rounds += 1;
+        }
+        let between_rounds = self.step == 0 && self.rounds > 0;
+        if between_rounds && new.every_secs != old.every_secs {
+            let delta = new.every_secs as f64 - old.every_secs as f64;
+            let d = Duration::from_secs_f64(delta.abs());
+            self.next = if delta > 0.0 {
+                self.next + d
+            } else {
+                self.next.checked_sub(d).unwrap_or(now).max(now)
+            };
+        }
+    }
+
     /// When the next click or key will be sent (None = no more: the
     /// macro has no click or key, or it ends first).
     pub fn next_input(&self, m: &Macro) -> Option<Instant> {
@@ -367,6 +387,40 @@ mod tests {
         for v in [0.5, 7.0, 3000.0, 5405.0, 86_400.0] {
             assert_eq!(parse_secs(&fmt_secs(v)), Some(v));
         }
+    }
+
+    #[test]
+    fn edit_while_running() {
+        let t0 = Instant::now();
+        let m = Macro {
+            steps: vec![click(0.5)],
+            every_secs: 3000.0,
+            times: 0,
+        };
+        let mut run = Run::new(t0);
+        run.tick(&m, t0); // click, round done: next round in 50 min
+        let next = run.next;
+        // a new click step: the timer is kept
+        let more = Macro {
+            steps: vec![click(0.5), click(0.7)],
+            ..m.clone()
+        };
+        run.edited(&m, &more, t0);
+        assert_eq!(run.next, next);
+        // a shorter pause counts for the pause going on
+        let short = Macro {
+            every_secs: 600.0,
+            ..more.clone()
+        };
+        run.edited(&more, &short, t0);
+        assert_eq!(run.next, next - Duration::from_secs(2400));
+        // never in the past
+        let zero = Macro {
+            every_secs: 0.0,
+            ..short.clone()
+        };
+        run.edited(&short, &zero, t0 + Duration::from_secs(10));
+        assert_eq!(run.next, t0 + Duration::from_secs(10));
     }
 
     #[test]
