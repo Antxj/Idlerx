@@ -125,6 +125,9 @@ Embutido e **ligado por padrão em todas as contas**, inclusive InPrivate.
   EasyList, EasyPrivacy e a lista de Peter Lowe.
 - **Bloqueia** scripts de anúncio, rastreadores e malware, e **esconde os
   espaços** onde os anúncios ficariam.
+- **Sem pop-ups**: janelas de propaganda, e qualquer janela que um site
+  tente abrir sozinho, sem um clique, não abrem. As janelas que você abre
+  clicando (um login, um link) funcionam normalmente.
 - **Listas sempre atualizadas**: baixadas sozinhas e renovadas uma vez por
   dia.
 - **Sites liberados**: uma lista de sites onde nada é bloqueado, para o caso

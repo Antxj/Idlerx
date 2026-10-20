@@ -1410,7 +1410,7 @@ dependencies = [
 
 [[package]]
 name = "idlerx"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "adblock",
  "base32",

@@ -25,12 +25,13 @@ use webview2_com::{
     take_pwstr, AcceleratorKeyPressedEventHandler,
     AddScriptToExecuteOnDocumentCreatedCompletedHandler, ContentLoadingEventHandler,
     CoreWebView2EnvironmentOptions, CreateCoreWebView2ControllerCompletedHandler,
-    CreateCoreWebView2EnvironmentCompletedHandler, ExecuteScriptCompletedHandler,
-    FocusChangedEventHandler, GetProcessExtendedInfosCompletedHandler, ProcessFailedEventHandler,
+    CreateCoreWebView2EnvironmentCompletedHandler, FocusChangedEventHandler,
+    GetProcessExtendedInfosCompletedHandler, ProcessFailedEventHandler,
 };
 use webview2_com::{
     CallDevToolsProtocolMethodCompletedHandler, CapturePreviewCompletedHandler,
-    DOMContentLoadedEventHandler, WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
+    DOMContentLoadedEventHandler, NewWindowRequestedEventHandler, WebMessageReceivedEventHandler,
+    WebResourceRequestedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, RECT};
 use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
@@ -407,7 +408,7 @@ impl Panel {
             // ad blocker (see `blocker`): every request of the page, iframes
             // included, is checked; the blocked ones get an empty answer
             if crate::blocker::enabled() {
-                watch_requests(&webview, env);
+                watch_requests(&webview, env, &account.name);
             }
             let _ = controller.add_GotFocus(&focus_handler, &mut token);
             let _ = controller.add_AcceleratorKeyPressed(&key_handler, &mut token);
@@ -504,33 +505,24 @@ impl Panel {
         self.fps_sent.set(Some(fps));
         self.awake_sent.set(Some(awake));
         let js = format!("window.__idlerxFps && window.__idlerxFps.set({fps}, {awake})");
-        let _ = unsafe {
-            self.webview.ExecuteScript(
-                &HSTRING::from(js),
-                &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
-            )
-        };
+        evaluate(&self.webview, &js, |_| {});
     }
 
     /// Asks the page how many frames it drew in the last second (the answer
     /// arrives asynchronously, read with [`Panel::fps_rate`]).
     pub fn request_fps_rate(&self) {
         let out = self.fps_rate.clone();
-        let handler = ExecuteScriptCompletedHandler::create(Box::new(move |res, json| {
-            let rate = res
-                .ok()
-                .and_then(|_| json.trim().parse::<f64>().ok())
-                .filter(|r| *r >= 0.0)
-                .map(|r| r.round() as u32);
-            out.set(rate);
-            Ok(())
-        }));
-        let _ = unsafe {
-            self.webview.ExecuteScript(
-                &HSTRING::from("window.__idlerxFps ? window.__idlerxFps.rate : -1"),
-                &handler,
-            )
-        };
+        evaluate(
+            &self.webview,
+            "window.__idlerxFps ? window.__idlerxFps.rate : -1",
+            move |v| {
+                let rate = v
+                    .and_then(|v| v.as_f64())
+                    .filter(|r| *r >= 0.0)
+                    .map(|r| r.round() as u32);
+                out.set(rate);
+            },
+        );
     }
 
     /// Frames per second the page actually drew (last measurement).
@@ -678,12 +670,7 @@ impl Panel {
     pub fn record(&self, on: bool) {
         self.recording.set(on);
         let js = format!("window.__idlerxFps && window.__idlerxFps.record({on})");
-        let _ = unsafe {
-            self.webview.ExecuteScript(
-                &HSTRING::from(js),
-                &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
-            )
-        };
+        evaluate(&self.webview, &js, |_| {});
     }
 
     /// Events reported since the last call, while recording.
@@ -888,8 +875,68 @@ impl Panel {
 
 /// Ad blocker: checks the page's requests and hides the ad spots once the
 /// document is loaded.
-unsafe fn watch_requests(webview: &ICoreWebView2, env: &ICoreWebView2Environment) {
+/// Runs a script in the page through the DevTools protocol and hands its
+/// result to `done` (None on failure). Unlike ExecuteScript, it does not
+/// count as a click of the user: with it, every metrics poll would let the
+/// page open windows and play sound as if the user had just clicked.
+fn evaluate(
+    webview: &ICoreWebView2,
+    js: &str,
+    done: impl FnOnce(Option<serde_json::Value>) + 'static,
+) {
+    let mut done = Some(done);
+    let handler = CallDevToolsProtocolMethodCompletedHandler::create(Box::new(move |res, json| {
+        let value = res.ok().and_then(|_| {
+            let v: serde_json::Value = serde_json::from_str(&json).ok()?;
+            if v.get("exceptionDetails").is_some() {
+                return None;
+            }
+            v["result"].get("value").cloned()
+        });
+        if let Some(done) = done.take() {
+            done(value);
+        }
+        Ok(())
+    }));
+    let params = serde_json::json!({ "expression": js, "returnByValue": true });
+    let _ = unsafe {
+        webview.CallDevToolsProtocolMethod(
+            &HSTRING::from("Runtime.evaluate"),
+            &HSTRING::from(params.to_string()),
+            &handler,
+        )
+    };
+}
+
+unsafe fn watch_requests(webview: &ICoreWebView2, env: &ICoreWebView2Environment, name: &str) {
     let mut token = Default::default();
+    // pop-ups: the engine has no `$popup` rules, so each new window is
+    // checked here; a blocked one is simply not opened
+    let account = name.to_string();
+    let popups = NewWindowRequestedEventHandler::create(Box::new(move |sender, args| {
+        let (Some(sender), Some(args)) = (sender, args) else {
+            return Ok(());
+        };
+        let mut uri = PWSTR::null();
+        args.Uri(&mut uri)?;
+        let uri = take_pwstr(uri);
+        let mut user = BOOL(1);
+        let _ = args.IsUserInitiated(&mut user);
+        let mut source = PWSTR::null();
+        let _ = sender.Source(&mut source);
+        let source = take_pwstr(source);
+        if crate::blocker::popup_blocked(&uri, &source, user.as_bool()) {
+            args.SetHandled(true)?;
+            let shown: String = uri.chars().take(150).collect();
+            crate::events::log(
+                &account,
+                &format!("janela de propaganda bloqueada: {shown}"),
+            );
+        }
+        Ok(())
+    }));
+    let _ = webview.add_NewWindowRequested(&popups, &mut token);
+
     let added = webview.cast::<ICoreWebView2_22>().and_then(|w22| {
         w22.AddWebResourceRequestedFilterWithRequestSourceKinds(
             &HSTRING::from("*"),
@@ -962,8 +1009,8 @@ unsafe fn watch_requests(webview: &ICoreWebView2, env: &ICoreWebView2Environment
         }
         let page = sender.clone();
         let collect = "(() => { const c = new Set(), i = new Set();             for (const e of document.querySelectorAll('[class],[id]')) {               if (e.id) i.add(e.id); for (const k of e.classList) c.add(k);               if (c.size + i.size > 8000) break; }             return { c: [...c], i: [...i] }; })()";
-        let done = ExecuteScriptCompletedHandler::create(Box::new(move |_, json| {
-            let v: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+        evaluate(&sender, collect, move |v| {
+            let v = v.unwrap_or_default();
             let list = |k: &str| -> Vec<String> {
                 v[k].as_array()
                     .map(|a| {
@@ -978,16 +1025,9 @@ unsafe fn watch_requests(webview: &ICoreWebView2, env: &ICoreWebView2Environment
                     "(() => {{ const s = document.createElement('style'); s.textContent = {};                      (document.head || document.documentElement).appendChild(s); }})()",
                     serde_json::Value::String(css)
                 );
-                let _ = unsafe {
-                    page.ExecuteScript(
-                        &HSTRING::from(js),
-                        &ExecuteScriptCompletedHandler::create(Box::new(|_, _| Ok(()))),
-                    )
-                };
+                evaluate(&page, &js, |_| {});
             }
-            Ok(())
-        }));
-        let _ = unsafe { sender.ExecuteScript(&HSTRING::from(collect), &done) };
+        });
         Ok(())
     }));
     let _ = w2.add_DOMContentLoaded(&loaded, &mut token);

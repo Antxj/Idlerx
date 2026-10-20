@@ -126,6 +126,9 @@ Built in and **on by default for every account**, InPrivate included.
   EasyList, EasyPrivacy and Peter Lowe's list.
 - **Blocks** ad scripts, trackers and malware, and **hides the spots** where
   ads would be.
+- **No pop-ups**: ad windows, and any window a site tries to open on its
+  own, without a click, are not opened. Windows you open by clicking (a
+  login, a link) work normally.
 - **Lists always up to date**: downloaded by themselves and refreshed once
   a day.
 - **Allowed sites**: a list of sites where nothing is blocked, in case a

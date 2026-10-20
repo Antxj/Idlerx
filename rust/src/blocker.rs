@@ -50,9 +50,79 @@ pub struct Status {
     pub error: Option<String>,
 }
 
+/// Pop-up rules of the lists (`$popup`), which the engine does not handle:
+/// ad networks by domain, and address fragments (with `*` wildcards).
+#[derive(Default)]
+struct PopupRules {
+    domains: std::collections::HashSet<String>,
+    fragments: Vec<Vec<String>>,
+}
+
+impl PopupRules {
+    fn parse(text: &str, into: &mut PopupRules) {
+        for line in text.lines() {
+            let line = line.trim();
+            if line.starts_with('!') || line.starts_with("@@") {
+                continue;
+            }
+            let Some((pattern, options)) = line.rsplit_once('$') else {
+                continue;
+            };
+            let opts: Vec<&str> = options.split(',').collect();
+            // only plain pop-up rules: not limited to some sites
+            if !opts.contains(&"popup") || opts.iter().any(|o| o.starts_with("domain=")) {
+                continue;
+            }
+            if let Some(host) = pattern.strip_prefix("||").and_then(|p| p.strip_suffix('^')) {
+                if !host.is_empty()
+                    && host
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+                {
+                    into.domains.insert(host.to_ascii_lowercase());
+                }
+            } else if !pattern.is_empty() && !pattern.contains(['^', '|']) && pattern.len() > 4 {
+                let parts: Vec<String> = pattern
+                    .split('*')
+                    .filter(|p| !p.is_empty())
+                    .map(String::from)
+                    .collect();
+                if !parts.is_empty() {
+                    into.fragments.push(parts);
+                }
+            }
+        }
+    }
+
+    fn matches(&self, url: &str) -> bool {
+        let host = host(url).to_ascii_lowercase();
+        let mut h = host.as_str();
+        loop {
+            if self.domains.contains(h) {
+                return true;
+            }
+            match h.split_once('.') {
+                Some((_, rest)) if rest.contains('.') => h = rest,
+                _ => break,
+            }
+        }
+        self.fragments.iter().any(|parts| {
+            let mut from = 0;
+            parts.iter().all(|p| match url[from..].find(p.as_str()) {
+                Some(i) => {
+                    from += i + p.len();
+                    true
+                }
+                None => false,
+            })
+        })
+    }
+}
+
 #[derive(Default)]
 struct Shared {
     engine: RwLock<Option<Arc<Engine>>>,
+    popups: RwLock<Arc<PopupRules>>,
     status: Mutex<Status>,
     /// Requests blocked since the app opened.
     blocked: AtomicU64,
@@ -82,6 +152,31 @@ fn allow_list() -> Vec<String> {
 /// `should_block` with the app's settings.
 pub fn check(url: &str, source: &str, kind: Kind) -> bool {
     enabled() && should_block(url, source, kind, &allow_list())
+}
+
+/// A page wants to open a new window: whether it is an ad (pop-up rules of
+/// the lists, an ad server, or opened without the user clicking). Counts it
+/// when so.
+pub fn popup_blocked(target: &str, source: &str, user_initiated: bool) -> bool {
+    if !enabled() || allowed(source, &allow_list()) {
+        return false;
+    }
+    let rules = shared()
+        .popups
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let listed = target.starts_with("http") && rules.matches(target);
+    // the engine counts what it blocks itself
+    if !listed && should_block(target, source, Kind::Subdocument, &allow_list()) {
+        return true;
+    }
+    // a window nobody asked for is never wanted in a game
+    let block = listed || !user_initiated;
+    if block {
+        shared().blocked.fetch_add(1, Ordering::Relaxed);
+    }
+    block
 }
 
 /// `cosmetic_css` with the app's settings.
@@ -220,11 +315,14 @@ fn download() -> Result<(), String> {
 /// Builds a new engine from the saved lists and puts it in use.
 fn build(wake: &dyn Fn()) {
     let mut set = FilterSet::new(false);
+    let mut popups = PopupRules::default();
     for (name, _) in LISTS {
         if let Ok(text) = std::fs::read_to_string(dir().join(format!("{name}.txt"))) {
+            PopupRules::parse(&text, &mut popups);
             set.add_filter_list(text, ParseOptions::default());
         }
     }
+    *shared().popups.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(popups);
     let engine = Engine::new_with_filter_set(set);
     let rules = engine_rules(&engine);
     *shared().engine.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(engine));
@@ -378,6 +476,28 @@ mod tests {
         let generic =
             engine.hidden_class_id_selectors(["ad-banner"], Vec::<&str>::new(), &res.exceptions);
         assert_eq!(generic, vec![".ad-banner".to_string()]);
+    }
+
+    #[test]
+    fn popup_rules() {
+        let mut r = PopupRules::default();
+        PopupRules::parse(
+            "||popnet.example^$popup
+||scoped.example^$popup,domain=x.com
+&popunder=$popup
+             /earn.php?z=*&ad=$popup,third-party
+@@||good.example^$popup
+||net.example^",
+            &mut r,
+        );
+        assert!(r.matches("https://popnet.example/go"));
+        assert!(r.matches("https://cdn.popnet.example/go"));
+        assert!(!r.matches("https://scoped.example/"));
+        assert!(r.matches("https://a.b/x?y=1&popunder=1"));
+        assert!(r.matches("https://a.b/earn.php?z=5&ad=1"));
+        assert!(!r.matches("https://a.b/earn.php?ad=1&z=5"));
+        assert!(!r.matches("https://net.example/"));
+        assert!(!r.matches("https://accounts.google.com/o/oauth2"));
     }
 
     #[test]
