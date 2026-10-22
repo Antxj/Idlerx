@@ -53,7 +53,7 @@ async function container(id, priv) {
   return c.cookieStoreId;
 }
 
-const stateOf = (a) => ({ hidden: !!a.hidden, awake: a.awake !== false, rec: !!a.rec });
+const stateOf = (a) => ({ hidden: !!a.hidden, awake: a.awake !== false, rec: !!a.rec, macro: !!a.macro });
 const pushState = (a) => {
   if (a.tabId != null) browser.tabs.sendMessage(a.tabId, { state: stateOf(a) }).catch(() => {});
 };
@@ -117,6 +117,9 @@ async function command(m) {
       break;
     case 'record':
       if (a) { a.rec = !!m.on; pushState(a); }
+      break;
+    case 'macro':
+      if (a) { a.macro = !!m.on; pushState(a); }
       break;
     case 'capture': {
       let data = null;

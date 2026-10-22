@@ -75,6 +75,10 @@ pub fn prefs(o: &Options) -> String {
     pref(p, "startup.homepage_welcome_url", "");
     pref(p, "startup.homepage_welcome_url.additional", "");
     pref(p, "browser.sessionstore.interval", 60000);
+    // never the "troubleshoot mode?" question after Firefox was ended by
+    // force (Idlerx closing, a crash): it would hold the start
+    pref(p, "toolkit.startup.max_resumed_crashes", -1);
+    pref(p, "toolkit.startup.recent_crashes", 0);
     // no telemetry, studies, sponsored content, AI or suggestions
     for k in [
         "datareporting.healthreport.uploadEnabled",
@@ -147,11 +151,24 @@ pub fn prefs(o: &Options) -> String {
     pref(p, "dom.ipc.processPriorityManager.backgroundUsesEcoQoS", false);
     // the frame limit, done by Firefox itself
     pref(p, "layout.frame_rate", if o.fps > 0 { o.fps as i64 } else { -1 });
+    // nothing kept that Idlerx does not use: history (back and forward
+    // still work), closed windows, translations, accessibility services
+    pref(p, "places.history.enabled", false);
+    pref(p, "browser.sessionstore.max_tabs_undo", 0);
+    pref(p, "browser.sessionstore.max_windows_undo", 0);
+    pref(p, "browser.translations.enable", false);
+    pref(p, "accessibility.force_disabled", 1);
+    // the network in the main process (one process less)
+    pref(p, "network.process.enabled", false);
     if o.economy {
-        // a few page processes shared by every account (logins stay apart:
-        // each account is its own container)
+        // fewer processes: drawing, media and the extensions (uBlock
+        // Origin, Idlerx's) inside the main one. Measured with 4 accounts:
+        // about 180 MB less. Each account keeps its own page process
+        // (Firefox gives every container its own).
         pref(p, "fission.webContentIsolationStrategy", 0);
-        pref(p, "dom.ipc.processCount", 4);
+        pref(p, "layers.gpu-process.enabled", false);
+        pref(p, "media.rdd-process.enabled", false);
+        pref(p, "extensions.webextensions.remote", false);
     }
     // extensions in the profile folder start enabled; fixed internal
     // addresses
@@ -176,14 +193,6 @@ pub fn prefs(o: &Options) -> String {
         pref(p, "media.peerconnection.ice.no_host", true);
     } else {
         pref(p, "network.proxy.type", 5);
-    }
-    // experiments (development): extra lines from IDLERX_FF_EXTRA
-    if let Ok(extra) = std::env::var("IDLERX_FF_EXTRA") {
-        for line in extra.split(';').filter(|l| l.contains('=')) {
-            let (k, v) = line.split_once('=').unwrap_or_default();
-            let v: serde_json::Value = serde_json::from_str(v).unwrap_or(v.into());
-            pref(p, k.trim(), v);
-        }
     }
     if o.debugger.is_some() {
         pref(p, "devtools.debugger.remote-enabled", true);

@@ -216,12 +216,14 @@ impl Panel {
     /// height (window messages: the Windows mouse is not used). False when
     /// the page size is not known yet.
     pub fn click(&self, fx: f32, fy: f32, button: config::MouseButton, double: bool) -> bool {
+        self.page.macro_input.set(Some(Instant::now()));
         self.window
             .click(fx, fy, button == config::MouseButton::Right, double)
     }
 
     /// Presses and releases a key (see `macros::KEYS`).
     pub fn key(&self, k: &crate::macros::Key) {
+        self.page.macro_input.set(Some(Instant::now()));
         self.window.key(k.vk as u16, k.text);
     }
 
@@ -233,6 +235,11 @@ impl Panel {
             self.page.recorded.borrow_mut().clear();
         }
         self.send(serde_json::json!({ "cmd": "record", "on": on }));
+    }
+
+    /// A macro runs on the account (Firefox's own menu stays shut).
+    pub fn set_macro(&self, on: bool) {
+        self.send(serde_json::json!({ "cmd": "macro", "on": on }));
     }
 
     /// Events reported since the last call, while recording.

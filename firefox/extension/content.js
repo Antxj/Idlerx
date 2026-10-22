@@ -4,11 +4,21 @@
 (() => {
   const toPage = (state) => window.postMessage({ __idlerxIn: state }, '*');
 
-  // state of the account (hidden, recording), now and when it changes
-  browser.runtime.sendMessage({ t: 'state' }).then((s) => s && toPage(s), () => {});
+  // state of the account (hidden, recording, macro), now and when it changes
+  let state = {};
+  const apply = (s) => { state = s; toPage(s); };
+  browser.runtime.sendMessage({ t: 'state' }).then((s) => s && apply(s), () => {});
   browser.runtime.onMessage.addListener((m) => {
-    if (m && m.state) toPage(m.state);
+    if (m && m.state) apply(m.state);
   });
+
+  // a right click of a macro, while recording one, or on a hidden account
+  // must not open Firefox's own menu: it would show on the screen and take
+  // the next keys (and closing it would be recorded). The page still gets
+  // the click, and its own menus work.
+  window.addEventListener('contextmenu', (e) => {
+    if (state.hidden || state.macro || state.rec) e.preventDefault();
+  }, true);
 
   // recorded clicks and keys (only the top document reports them)
   window.addEventListener('message', (e) => {

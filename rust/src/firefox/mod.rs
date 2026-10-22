@@ -38,6 +38,8 @@ pub const MIN_VERSION: u32 = 128;
 const IDLE_CLOSE: Duration = Duration::from_secs(20);
 /// How long an account's window may take to show up.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(40);
+/// How long a network's Firefox may take to connect its extension.
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Keys pressed inside a page that belong to the app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,6 +85,9 @@ pub struct Page {
     pub loaded: Cell<bool>,
     pub failure: Cell<Option<Failure>>,
     pub got_focus: Cell<bool>,
+    /// Last click or key a macro sent (the page's "focused" that follows
+    /// is not the user's).
+    pub macro_input: Cell<Option<Instant>>,
     pub hotkey: Cell<Option<Hotkey>>,
     pub recording: Cell<bool>,
     pub recorded: RefCell<Vec<Value>>,
@@ -123,6 +128,7 @@ struct Net {
     idle_since: Option<Instant>,
     /// The start window, hidden (see `Window::make_keeper`).
     keeper: Option<Window>,
+    started: Instant,
     closing: bool,
 }
 
@@ -357,6 +363,7 @@ impl Engine {
             loaded: Cell::new(false),
             failure: Cell::new(None),
             got_focus: Cell::new(false),
+            macro_input: Cell::new(None),
             hotkey: Cell::new(None),
             recording: Cell::new(false),
             recorded: RefCell::new(Vec::new()),
@@ -431,6 +438,7 @@ impl Engine {
                 pending: vec![json!({ "cmd": "scheme", "value": self.scheme })],
                 idle_since: None,
                 keeper: None,
+                started: Instant::now(),
                 closing: false,
             },
         );
@@ -498,7 +506,14 @@ impl Engine {
                     let gone = self.nets.get(&net).is_some_and(|n| n.connected);
                     if gone {
                         let closing = self.nets.get(&net).is_some_and(|n| n.closing);
-                        self.nets.remove(&net);
+                        log(&net, if closing { "Firefox fechado (sem contas)" } else { "o Firefox fechou" });
+                        // whatever is left of that Firefox goes too: a new
+                        // one needs its profile
+                        if let Some(n) = self.nets.remove(&net) {
+                            for pid in [n.browser, n.launcher].into_iter().flatten() {
+                                kill(pid);
+                            }
+                        }
                         if !closing {
                             for p in self.pages.values().filter(|p| p.net == net) {
                                 p.failure.set(Some(Failure::BrowserGone));
@@ -516,8 +531,12 @@ impl Engine {
                         continue;
                     };
                     match result {
-                        Ok(pid) => n.launcher = Some(pid),
+                        Ok(pid) => {
+                            n.launcher = Some(pid);
+                            log(&net, "Firefox iniciado");
+                        }
                         Err(e) => {
+                            log(&net, &format!("o Firefox não iniciou: {e}"));
                             self.nets.remove(&net);
                             later.extend(self.fail_waiting(&net, &e));
                         }
@@ -573,6 +592,23 @@ impl Engine {
                 }
             }
         }
+        // a Firefox that never connected: given up (its accounts can be
+        // opened again)
+        let stuck: Vec<String> = self
+            .nets
+            .iter()
+            .filter(|(_, n)| !n.connected && n.started.elapsed() > CONNECT_TIMEOUT)
+            .map(|(k, _)| k.clone())
+            .collect();
+        for net in stuck {
+            log(&net, "o Firefox não conectou a extensão em 30 s");
+            if let Some(n) = self.nets.remove(&net) {
+                for pid in [n.browser, n.launcher].into_iter().flatten() {
+                    kill(pid);
+                }
+            }
+            later.extend(self.fail_waiting(&net, "o Firefox não respondeu"));
+        }
         // a Firefox without accounts for a while closes (frees its memory)
         let idle: Vec<String> = self
             .nets
@@ -620,6 +656,7 @@ impl Engine {
     fn connected(&mut self, net: &str) {
         let Some(n) = self.nets.get_mut(net) else { return };
         n.connected = true;
+        log(net, &format!("extensão conectada ({:.1} s)", n.started.elapsed().as_secs_f32()));
         let mut pending = std::mem::take(&mut n.pending);
         // first of all, the containers that must go (never with an empty
         // list: that would be every account's)
@@ -693,7 +730,13 @@ impl Engine {
             }
             "focus" => {
                 if let Some(p) = page {
-                    p.got_focus.set(true);
+                    let by_macro = p
+                        .macro_input
+                        .get()
+                        .is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
+                    if !by_macro {
+                        p.got_focus.set(true);
+                    }
                 }
             }
             "captured" => {
@@ -735,9 +778,7 @@ impl Engine {
                     }
                 }
             }
-            "error" => {
-                crate::events::log("Firefox", msg["what"].as_str().unwrap_or_default());
-            }
+            "error" => log(net, msg["what"].as_str().unwrap_or_default()),
             _ => {}
         }
         None
@@ -757,6 +798,9 @@ fn launch(
     use std::process::Command;
     const CREATE_SUSPENDED: u32 = 0x0000_0004;
     let dir = profile::prepare(net, o)?;
+    // a Firefox left with this profile (still closing) would keep it
+    // locked: the new one would quit at once
+    end_firefox_using(&dir);
     let mut cmd = Command::new(firefox);
     cmd.args(["--new-instance", "-no-remote", "--wait-for-browser", "-profile"])
         .arg(&dir);
@@ -780,6 +824,41 @@ fn launch(
         rdp::install_extension(p)?;
     }
     Ok(pid)
+}
+
+/// A line in the pages log about a network's Firefox.
+fn log(net: &str, what: &str) {
+    crate::events::log(&format!("Firefox {net}"), what);
+}
+
+/// Ends the Firefox processes started with `profile` (only Idlerx's own
+/// profiles are ever passed here).
+fn end_firefox_using(profile: &std::path::Path) {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let norm = |s: &str| s.replace('/', "\\").to_ascii_lowercase();
+    let needle = norm(&profile.to_string_lossy());
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+    );
+    let mut ended = false;
+    for (pid, p) in sys.processes() {
+        let is_firefox = p.name().to_string_lossy().eq_ignore_ascii_case("firefox.exe");
+        let ours = p
+            .cmd()
+            .iter()
+            .any(|a| norm(&a.to_string_lossy()).contains(&needle));
+        if is_firefox && ours {
+            kill(pid.as_u32());
+            ended = true;
+        }
+    }
+    if ended {
+        // the profile's lock goes with the process
+        std::thread::sleep(Duration::from_millis(800));
+    }
 }
 
 fn free_port() -> Option<u16> {

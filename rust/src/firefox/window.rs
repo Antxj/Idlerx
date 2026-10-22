@@ -164,12 +164,19 @@ impl Window {
     /// Presses and releases a key (virtual key code, and its text if it
     /// types something).
     pub fn key(self, vk: u16, text: Option<&str>) {
+        // the scan code gives the page the key's position (`code`)
         let scan = unsafe { MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) } as isize;
         // arrows, Insert/Delete, Home/End, PageUp/Down: "extended" keys
         let extended = matches!(vk, 0x21..=0x28 | 0x2D | 0x2E) as isize;
         let l_down = 1 | (scan << 16) | (extended << 24);
         let l_up = l_down | (1 << 30) | (1 << 31);
-        // the page must have the keyboard focus inside the window
+        // The accounts of a network share one Firefox, which gives keys to
+        // the window it holds active, not to the one that got the message:
+        // this window is made the active one for the key, then the window
+        // that really has the keyboard gets it back (all in the order of
+        // Firefox's queue), so the user's own typing stays where it was.
+        let focused = keyboard_window(self);
+        self.post(wm::WM_ACTIVATE, 1, 0);
         self.post(wm::WM_SETFOCUS, 0, 0);
         self.post(wm::WM_KEYDOWN, vk as usize, l_down);
         if let Some(t) = text {
@@ -178,6 +185,12 @@ impl Window {
             }
         }
         self.post(wm::WM_KEYUP, vk as usize, l_up);
+        self.post(wm::WM_KILLFOCUS, 0, 0);
+        self.post(wm::WM_ACTIVATE, 0, 0);
+        if let Some(f) = focused.filter(|f| *f != self) {
+            f.post(wm::WM_ACTIVATE, 1, 0);
+            f.post(wm::WM_SETFOCUS, 0, 0);
+        }
     }
 
     /// The window Firefox opens when it starts: hidden for good, without a
@@ -226,4 +239,29 @@ pub fn windows_of(pid: u32, only_strays: bool) -> Vec<Window> {
     };
     unsafe { wm::EnumWindows(Some(each), &mut s as *mut _ as LPARAM) };
     s.out
+}
+
+/// The account window of Firefox's thread that has the keyboard (None if
+/// none).
+fn keyboard_window(of: Window) -> Option<Window> {
+    unsafe {
+        let thread = wm::GetWindowThreadProcessId(of.h(), std::ptr::null_mut());
+        let mut info: wm::GUITHREADINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<wm::GUITHREADINFO>() as u32;
+        if wm::GetGUIThreadInfo(thread, &mut info) == 0 || info.hwndFocus.is_null() {
+            return None;
+        }
+        // focus may be on a child of the account's window
+        let mut h = info.hwndFocus;
+        loop {
+            if class_of(h) == "MozillaWindowClass" && title_of(h).contains("\u{2063}idlerx:") {
+                return Some(Window(h as isize));
+            }
+            let parent = wm::GetParent(h);
+            if parent.is_null() {
+                return None;
+            }
+            h = parent;
+        }
+    }
 }
