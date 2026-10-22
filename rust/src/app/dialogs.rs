@@ -407,6 +407,99 @@ impl App {
                 }
                 Dialog::ConfirmDeleteGroup(gid, with_accounts)
             }
+            Dialog::FirefoxIntro => {
+                let modal = egui::Modal::new(egui::Id::new("firefox_intro")).show(ctx, |ui| {
+                    let dark = ui.visuals().dark_mode;
+                    ui.set_width(460.0);
+                    ui.heading(tr!("O Idlerx agora usa o Firefox", "Idlerx now uses Firefox"));
+                    ui.add_space(6.0);
+                    for line in [
+                        tr!(
+                            "• Cada conta é um contêiner do Firefox: login, cookies e dados \
+                             próprios, como antes.",
+                            "• Each account is a Firefox container: its own login, cookies and \
+                             data, as before."
+                        ),
+                        tr!(
+                            "• O uBlock Origin completo bloqueia anúncios, rastreadores e pop-ups \
+                             em todas as contas. O escudo 🛡 no cabeçalho da conta abre o painel \
+                             dele (liberar um site, remover um banner).",
+                            "• The full uBlock Origin blocks ads, trackers and pop-ups in every \
+                             account. The shield 🛡 in the account's header opens its panel \
+                             (allow a site, remove a banner)."
+                        ),
+                        tr!(
+                            "• Os logins, as senhas salvas e os saves que os jogos guardam no \
+                             navegador vêm do Edge sozinhos, conta por conta. Se algum jogo \
+                             pedir login, entre uma vez.",
+                            "• Each account's logins, saved passwords and the saves games keep \
+                             in the browser come over from Edge by themselves. If a game asks \
+                             you to log in, do it once."
+                        ),
+                        tr!(
+                            "• Ctrl+1…9 mostra a conta daquela posição da lista, também de dentro \
+                             do jogo.",
+                            "• Ctrl+1…9 shows the account at that place of the list, also from \
+                             inside the game."
+                        ),
+                        tr!(
+                            "• O Idlerx usa perfis próprios do Firefox: o seu Firefox de sempre \
+                             não muda.",
+                            "• Idlerx uses Firefox profiles of its own: your everyday Firefox \
+                             does not change."
+                        ),
+                    ] {
+                        ui.label(line);
+                        ui.add_space(2.0);
+                    }
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(tr!(
+                            "Os dados antigos do Edge ficam guardados até você apagar \
+                             (Configurações › Apagar dados do Edge).",
+                            "The old Edge data stays until you delete it (Settings › Delete \
+                             Edge data)."
+                        ))
+                        .small()
+                        .color(weak(dark)),
+                    );
+                    ui.add_space(8.0);
+                    ui.add(
+                        egui::Button::new(RichText::new(tr!("Entendi", "Got it")).color(Color32::WHITE))
+                            .fill(ACCENT),
+                    )
+                    .clicked()
+                });
+                if modal.inner || modal.should_close() {
+                    keep = false;
+                    self.cfg.firefox_intro_shown = true;
+                    self.mark_dirty();
+                }
+                Dialog::FirefoxIntro
+            }
+            Dialog::ConfirmDeleteEdge => {
+                match confirm(
+                    ctx,
+                    tr!("Apagar os dados do Edge?", "Delete the Edge data?"),
+                    tr!(
+                        "Apaga as pastas da versão anterior do Idlerx (motor do Edge). Os logins, \
+                         senhas e saves que vieram para o Firefox continuam. Não dá para desfazer.",
+                        "Deletes the folders of Idlerx's previous version (Edge engine). The \
+                         logins, passwords and saves that came over to Firefox stay. It cannot \
+                         be undone."
+                    ),
+                    tr!("Apagar", "Delete"),
+                ) {
+                    Some(true) => {
+                        crate::migrate::delete_old();
+                        events::log("Idlerx", "dados do Edge apagados");
+                        keep = false;
+                    }
+                    Some(false) => keep = false,
+                    None => {}
+                }
+                Dialog::ConfirmDeleteEdge
+            }
             Dialog::ConfirmQuit => {
                 match confirm(
                     ctx,
@@ -741,6 +834,21 @@ impl App {
                     let dir = config::profiles_dir();
                     let _ = std::fs::create_dir_all(&dir);
                     let _ = open::that(dir);
+                }
+                if !crate::migrate::old_dirs().is_empty()
+                    && ui
+                        .button(tr!("Apagar dados do Edge…", "Delete Edge data…"))
+                        .on_hover_text(tr!(
+                            "Dados da versão anterior do Idlerx (motor do Edge). Os logins, \
+                             senhas e saves das contas já vieram para o Firefox; apague quando \
+                             tiver conferido que os seus jogos estão em dia.",
+                            "Data of Idlerx's previous version (Edge engine). The accounts' \
+                             logins, passwords and saves already came over to Firefox; delete \
+                             it once you have checked that your games are fine."
+                        ))
+                        .clicked()
+                {
+                    self.dialog = Some(Dialog::ConfirmDeleteEdge);
                 }
                 if ui
                     .button(tr!("Registro das páginas", "Pages log"))

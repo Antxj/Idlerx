@@ -13,6 +13,7 @@ mod firefox;
 mod macros;
 mod metrics;
 mod panels;
+mod leveldb;
 mod migrate;
 mod passwords;
 mod single;

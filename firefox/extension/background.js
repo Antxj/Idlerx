@@ -88,6 +88,17 @@ async function command(m) {
       send({ ev: 'log', what: 'cookies trazidos: ' + ok + '/' + (m.list || []).length });
       break;
     }
+    case 'storage': {
+      // localStorage brought from the previous engine: kept until the
+      // account opens that site (content.js puts it back)
+      const storeId = await container(m.container, false);
+      const key = 'restore:' + storeId;
+      const all = (await browser.storage.local.get(key))[key] || {};
+      const site = all[m.origin] || (all[m.origin] = {});
+      for (const [k, v] of m.items || []) site[k] = m.append ? (site[k] || '') + v : v;
+      await browser.storage.local.set({ [key]: all });
+      break;
+    }
     case 'close':
       if (a) await closeAccount(m.id, a);
       break;
@@ -231,6 +242,24 @@ browser.runtime.onMessage.addListener((m, sender) => {
         send({ ev: 'logins', req, id, origin: m.origin });
         setTimeout(() => { if (asks.delete(req)) resolve([]); }, 5000);
       });
+    case 'restore':
+      // a site of the account opened: its localStorage from the previous
+      // engine, once
+      return (async () => {
+        const key = 'restore:' + tab.cookieStoreId;
+        const all = (await browser.storage.local.get(key))[key];
+        if (!all || !all[m.origin]) return null;
+        const site = all[m.origin];
+        delete all[m.origin];
+        if (Object.keys(all).length) await browser.storage.local.set({ [key]: all });
+        else await browser.storage.local.remove(key);
+        return site;
+      })();
+    case 'restored':
+      // the page loads again, now with its saves
+      send({ ev: 'log', what: 'save do site ' + m.origin + ' trazido (' + m.n + ' itens)' });
+      browser.tabs.reload(tab.id).catch(() => {});
+      return;
     case 'login':
       send({ ev: 'login', id, origin: m.origin, username: m.username, password: m.password });
       return;

@@ -29,10 +29,15 @@
     }
   });
 
-  // keys that belong to Idlerx: F11 (focus mode) and Esc (leaves it)
+  // keys that belong to Idlerx: F11 (focus mode), Esc (leaves it) and
+  // Ctrl+1…9 (shows that account)
   window.addEventListener('keydown', (e) => {
     if (!e.isTrusted) return;
-    if (e.key === 'F11') {
+    if (e.ctrlKey && !e.altKey && !e.shiftKey && /^Digit[1-9]$/.test(e.code)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      browser.runtime.sendMessage({ t: 'key', key: 'Ctrl+' + e.code.slice(5) }).catch(() => {});
+    } else if (e.key === 'F11') {
       e.preventDefault();
       e.stopImmediatePropagation();
       browser.runtime.sendMessage({ t: 'key', key: 'F11' }).catch(() => {});
@@ -52,9 +57,23 @@
   window.addEventListener('mousedown', (e) => { if (e.isTrusted) focused(); }, true);
   window.addEventListener('focus', focused, true);
 
-  // ---- saved passwords of this account (kept by Idlerx, never by Firefox) ----
   if (!/^https?:$/.test(location.protocol)) return;
   const origin = location.origin;
+
+  // the site's saves from the previous engine (localStorage), put back once,
+  // then the page loads again with them
+  if (window.top === window) {
+    browser.runtime.sendMessage({ t: 'restore', origin }).then((site) => {
+      if (!site) return;
+      let n = 0;
+      for (const [k, v] of Object.entries(site)) {
+        try { localStorage.setItem(k, v); n++; } catch (e) {}
+      }
+      browser.runtime.sendMessage({ t: 'restored', origin, n }).catch(() => {});
+    }, () => {});
+  }
+
+  // ---- saved passwords of this account (kept by Idlerx, never by Firefox) ----
   let logins = null;
   let asked = false;
   const setValue = (input, value) => {

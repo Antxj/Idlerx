@@ -52,7 +52,7 @@ pub fn open(
     parent: isize,
     account: &Account,
     browser: Browser,
-    cookies: Vec<serde_json::Value>,
+    moved: crate::migrate::Moved,
     wake: Wake,
 ) -> PanelSlot {
     let slot: PanelSlot = Rc::new(RefCell::new(None));
@@ -75,7 +75,8 @@ pub fn open(
             proxy: browser.vpn.map(|(_, port)| port),
             debugger: None,
         },
-        cookies,
+        cookies: moved.cookies,
+        storage: moved.storage,
     };
     let s = slot.clone();
     let keep_active = browser.keep_active;

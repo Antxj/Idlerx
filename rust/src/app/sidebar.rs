@@ -128,41 +128,45 @@ impl App {
                 ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
                     // the app's process tree includes every account's browser
                     let total = self.metrics.get(metrics::TOTAL).unwrap_or_default();
+                    // each network's Firefox (its accounts share its processes)
+                    let mut nets: Vec<String> =
+                        self.panels.values().map(|p| p.network().to_string()).collect();
+                    nets.sort();
+                    nets.dedup();
                     let (mut cpu, mut mem) = (0.0f32, 0u64);
-                    for id in self.panels.keys() {
-                        if let Some(u) = self.metrics.get(id) {
-                            cpu += u.cpu;
-                            mem += u.memory;
-                        }
+                    let mut lines = String::new();
+                    for net in &nets {
+                        let Some(u) = self.metrics.get(&net_key(net)) else { continue };
+                        cpu += u.cpu;
+                        mem += u.memory;
+                        let n = self.panels.values().filter(|p| p.network() == net).count();
+                        let name = match net.strip_prefix("vpn_").and_then(|g| self.cfg.group(g)) {
+                            Some(g) => trf!("Firefox · VPN de {}", "Firefox · {}'s VPN", g.name),
+                            None => tr!("Firefox (sem VPN)", "Firefox (no VPN)").to_string(),
+                        };
+                        lines.push_str(&trf!(
+                            "{name}, {n} conta(s): CPU {:.0}% · RAM {}\n",
+                            "{name}, {n} account(s): CPU {:.0}% · RAM {}\n",
+                            u.cpu,
+                            metrics::fmt_memory(u.memory)
+                        ));
                     }
-                    let n = self.panels.len();
                     let text = format!(
                         "CPU {:.0}% · RAM {}",
                         total.cpu,
                         metrics::fmt_memory(total.memory)
                     );
-                    let rest = if self.economy {
-                        tr!(
-                            "Interface e navegador compartilhado",
-                            "Interface and shared browser"
-                        )
-                    } else {
-                        tr!("Interface", "Interface")
-                    };
                     let detail = trf!(
-                        "Total do Idlerx (todas as contas + interface)\n\
-                         Contas abertas ({n}): CPU {cpu:.0}% · RAM {}\n\
-                         {rest}: CPU {:.0}% · RAM {}\n\n\
+                        "Total do Idlerx (contas + interface)\n\
+                         {lines}Interface: CPU {:.0}% · RAM {}\n\n\
                          CPU: parte do processador do PC inteiro (100% = todos os núcleos).\n\
                          RAM: memória em uso pelos processos (conjunto de trabalho).\n\
                          GPU (placa de vídeo) não é medida.",
-                        "Idlerx total (all accounts + interface)\n\
-                         Open accounts ({n}): CPU {cpu:.0}% · RAM {}\n\
-                         {rest}: CPU {:.0}% · RAM {}\n\n\
+                        "Idlerx total (accounts + interface)\n\
+                         {lines}Interface: CPU {:.0}% · RAM {}\n\n\
                          CPU: share of the whole PC's processor (100% = all cores).\n\
                          RAM: memory in use by the processes (working set).\n\
                          GPU (graphics card) is not measured.",
-                        metrics::fmt_memory(mem),
                         (total.cpu - cpu).max(0.0),
                         metrics::fmt_memory(total.memory.saturating_sub(mem))
                     );
@@ -171,11 +175,11 @@ impl App {
                     if self.economy {
                         leaf(ui).side_tip(tr!(
                             "Modo econômico ativado\n\n\
-                             Um navegador compartilhado por todas as contas, cada uma \
-                             no seu perfil. Pode ser desligado em Configurações.",
+                             Menos processos do Firefox para todas as contas, cada uma \
+                             no seu contêiner. Pode ser desligado em Configurações.",
                             "Economy mode on\n\n\
-                             One browser shared by all accounts, each in its own \
-                             profile. It can be turned off in Settings."
+                             Fewer Firefox processes for all accounts, each in its own \
+                             container. It can be turned off in Settings."
                         ));
                     }
                 });
@@ -201,10 +205,6 @@ impl App {
                 s = format!("{} {clock} · {s}", tr!("⟲ próxima em", "⟲ next in"));
             } else if self.macro_running(id) {
                 s = format!("⟲ macro · {s}");
-            }
-            if let Some(u) = self.metrics.get(id) {
-                s.push_str(" · ");
-                s.push_str(&usage_text(u));
             }
             (s, ONLINE, true)
         } else if self.queue.iter().any(|q| q == id) {
@@ -721,23 +721,28 @@ impl App {
             }
         }
 
-        let (mut cpu, mut mem) = (0.0f32, 0u64);
-        for id in &ids {
-            if let Some(u) = self.metrics.get(id) {
-                cpu += u.cpu;
-                mem += u.memory;
-            }
-        }
+        // a group with a VPN has a Firefox of its own: its usage
+        let usage = g
+            .active_vpn()
+            .and_then(|_| self.metrics.get(&net_key(&crate::panels::network(Some(&g.id)))))
+            .map(|u| {
+                trf!(
+                    "\nFirefox do grupo: CPU {:.0}% · RAM {}",
+                    "\nThe group's Firefox: CPU {:.0}% · RAM {}",
+                    u.cpu,
+                    metrics::fmt_memory(u.memory)
+                )
+            })
+            .unwrap_or_default();
         let vpn_tip = badge.map(|(_, t)| format!("{t}\n\n")).unwrap_or_default();
         let tip = trf!(
-            "{vpn_tip}{} conta(s) · {open} aberta(s)\nCPU {cpu:.0}% · RAM {}\n\nClique para mostrar só este grupo na grade \
+            "{vpn_tip}{} conta(s) · {open} aberta(s){usage}\n\nClique para mostrar só este grupo na grade \
              (de novo: todas). A seta recolhe/expande. Arraste para mudar a ordem; \
              solte contas aqui para colocá-las no grupo.",
-            "{vpn_tip}{} account(s) · {open} open\nCPU {cpu:.0}% · RAM {}\n\nClick to show only this group in the grid \
+            "{vpn_tip}{} account(s) · {open} open{usage}\n\nClick to show only this group in the grid \
              (again: all). The arrow collapses/expands. Drag to reorder; drop \
              accounts here to put them in the group.",
-            ids.len(),
-            metrics::fmt_memory(mem)
+            ids.len()
         );
         let resp = resp.side_tip(tip);
         side_menu(&resp, |ui| {

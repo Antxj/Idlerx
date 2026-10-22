@@ -6,8 +6,9 @@
 //!
 //! Each account's data was in one of three places, depending on how it
 //! last ran: the shared browser (economy mode), its group's VPN browser, or
-//! its own folder. The newest one is used. Once every account has moved,
-//! the old folders are deleted (they can take hundreds of MB).
+//! its own folder. The newest one is used. The old folders stay until the
+//! user deletes them in Settings (a game may keep data elsewhere, such as
+//! IndexedDB, that does not come over).
 
 use crate::passwords::Login;
 use serde_json::{json, Value};
@@ -19,6 +20,9 @@ pub struct Moved {
     /// Cookies in the shape Firefox's extension API takes (`cookies.set`).
     pub cookies: Vec<Value>,
     pub logins: Vec<Login>,
+    /// localStorage of each site (many browser games keep their saves
+    /// there): origin -> (key, value).
+    pub storage: std::collections::HashMap<String, Vec<(String, String)>>,
 }
 
 /// Folders of the previous engine (everything in the profiles folder that
@@ -66,7 +70,12 @@ pub fn read(profile: &str) -> Option<Moved> {
     let key = key(&state)?;
     let cookies = read_cookies(&dir.join("Network").join("Cookies"), &key).unwrap_or_default();
     let logins = read_logins(&dir.join("Login Data"), &key).unwrap_or_default();
-    Some(Moved { cookies, logins })
+    let storage = read_storage(&dir.join("Local Storage").join("leveldb"));
+    Some(Moved {
+        cookies,
+        logins,
+        storage,
+    })
 }
 
 /// The AES key of a WebView2 browser (from its Local State).
@@ -233,6 +242,22 @@ fn read_logins(path: &Path, key: &[u8]) -> Option<Vec<Login>> {
     Some(out)
 }
 
+/// The localStorage of every site, from a copy of its LevelDB folder.
+fn read_storage(dir: &Path) -> std::collections::HashMap<String, Vec<(String, String)>> {
+    let copy = std::env::temp_dir().join(format!("idlerx-move-{}", crate::config::new_id()));
+    if std::fs::create_dir_all(&copy).is_err() {
+        return Default::default();
+    }
+    if let Ok(files) = std::fs::read_dir(dir) {
+        for f in files.flatten() {
+            let _ = std::fs::copy(f.path(), copy.join(f.file_name()));
+        }
+    }
+    let out = crate::leveldb::local_storage(&crate::leveldb::read_dir(&copy));
+    let _ = std::fs::remove_dir_all(&copy);
+    out
+}
+
 /// "https://site:port" of an address.
 fn origin_of(url: &str) -> Option<String> {
     let (scheme, rest) = url.split_once("://")?;
@@ -240,7 +265,7 @@ fn origin_of(url: &str) -> Option<String> {
     (!host.is_empty()).then(|| format!("{scheme}://{host}"))
 }
 
-/// Deletes the previous engine's folders (every account has moved).
+/// Deletes the previous engine's folders (asked in Settings).
 pub fn delete_old() {
     std::thread::spawn(|| {
         for dir in old_dirs() {
@@ -292,10 +317,11 @@ mod real {
         for p in std::env::var("PROFILES").unwrap().split(',') {
             match super::read(p) {
                 Some(m) => println!(
-                    "{p}: {} cookies {:?}, {} logins",
+                    "{p}: {} cookies {:?}, {} logins, storage {:?}",
                     m.cookies.len(),
                     m.cookies.iter().map(|c| format!("{}={}", c["name"].as_str().unwrap_or(""), c["value"].as_str().unwrap_or(""))).collect::<Vec<_>>(),
-                    m.logins.len()
+                    m.logins.len(),
+                    m.storage.iter().map(|(o, items)| (o.clone(), items.iter().map(|(k, v)| format!("{k}:{} chars:{}", v.chars().count(), v.chars().take(14).collect::<String>())).collect::<Vec<_>>())).collect::<Vec<_>>()
                 ),
                 None => println!("{p}: nothing"),
             }

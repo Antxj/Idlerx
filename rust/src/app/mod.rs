@@ -173,6 +173,10 @@ enum Dialog {
     Macro(macro_edit::MacroEdit),
     /// Saved passwords of an account.
     Passwords(String),
+    /// First start with Firefox: what changed.
+    FirefoxIntro,
+    /// Asks before deleting the previous engine's folders.
+    ConfirmDeleteEdge,
 }
 
 pub struct App {
@@ -320,6 +324,7 @@ impl App {
         let screenshot = std::env::var("IDLERX_SCREENSHOT")
             .ok()
             .filter(|v| !v.is_empty());
+        let intro = !cfg.firefox_intro_shown;
         let dialog = match screenshot.as_deref() {
             Some("settings") => Some(Dialog::Settings),
             // confirmation to delete the first group
@@ -347,6 +352,7 @@ impl App {
                     error: None,
                 })
             }),
+            _ if intro => Some(Dialog::FirefoxIntro),
             _ => None,
         };
         App {
@@ -528,9 +534,9 @@ impl App {
                     in_private: self.cfg.in_private(&acc),
                     fps: self.fps,
                 };
-                // logins from the previous engine, once
-                let cookies = self.moved_cookies(&acc.profile);
-                let slot = panels::open(self.hwnd, &acc, browser, cookies, wake);
+                // logins and saves from the previous engine, once
+                let moved = self.moved_data(&acc.profile);
+                let slot = panels::open(self.hwnd, &acc, browser, moved, wake);
                 self.starting = Some((id, slot));
             }
             _ => {
@@ -540,22 +546,24 @@ impl App {
         }
     }
 
-    /// The account's cookies from WebView2, the first time it opens with
-    /// Firefox. When every account has moved, the old folders go.
-    fn moved_cookies(&mut self, profile: &str) -> Vec<serde_json::Value> {
+    /// The account's logins (cookies) and sites' saves (localStorage) from
+    /// WebView2, the first time it opens with Firefox.
+    fn moved_data(&mut self, profile: &str) -> crate::migrate::Moved {
         let profiles: Vec<String> = self.cfg.accounts.iter().map(|a| a.profile.clone()).collect();
         let Some(pending) = self.cfg.webview2_pending.as_mut() else {
-            return Vec::new();
+            return Default::default();
         };
         let had = pending.iter().any(|p| p == profile);
         pending.retain(|p| p != profile && profiles.contains(p));
         let done = pending.is_empty();
         self.mark_dirty();
-        let cookies = if had {
-            crate::migrate::read(profile).map(|m| m.cookies).unwrap_or_default()
+        let mut moved = if had {
+            crate::migrate::read(profile).unwrap_or_default()
         } else {
-            Vec::new()
+            Default::default()
         };
+        // the passwords came at the start
+        moved.logins.clear();
         if had {
             let name = self
                 .cfg
@@ -564,13 +572,21 @@ impl App {
                 .find(|a| a.profile == profile)
                 .map(|a| a.name.clone())
                 .unwrap_or_default();
-            events::log(&name, &format!("{} cookie(s) trazidos do Edge", cookies.len()));
+            events::log(
+                &name,
+                &format!(
+                    "trazidos do Edge: {} cookie(s), dados de {} site(s)",
+                    moved.cookies.len(),
+                    moved.storage.len()
+                ),
+            );
         }
-        if done && !crate::migrate::old_dirs().is_empty() {
-            events::log("Idlerx", "todas as contas migradas: apagando as pastas do Edge");
-            crate::migrate::delete_old();
+        if done {
+            // the old folders stay until the user deletes them in Settings
+            // (a game may keep data there that could not come over)
+            events::log("Idlerx", "todas as contas migradas do Edge");
         }
-        cookies
+        moved
     }
 
     fn apply(&mut self, action: Action) {
@@ -898,6 +914,7 @@ impl App {
             match k {
                 Hotkey::Focus => self.focus_mode = !self.focus_mode,
                 Hotkey::Escape => self.focus_mode = false,
+                Hotkey::Account(n) => self.show_nth(n),
             }
             ctx.request_repaint();
         }
@@ -989,6 +1006,23 @@ impl App {
         }
     }
 
+    /// Ctrl+1…9: shows the account at that place of the list (opening it
+    /// if it was paused).
+    fn show_nth(&mut self, n: u8) {
+        let Some(id) = self.cfg.display_order().get(n as usize - 1).cloned() else {
+            return;
+        };
+        if !self.is_open_or_opening(&id) {
+            self.request_open(&id);
+        }
+        let in_grid = self.cfg.layout == Layout::Grid
+            && self.cfg.grid_accounts(|i| self.is_open_or_opening(i)).contains(&id);
+        if !in_grid {
+            self.cfg.layout = Layout::Tabs;
+        }
+        self.apply(Action::Select(id));
+    }
+
     fn keyboard(&mut self, ctx: &egui::Context) {
         let (f11, esc, new) = ctx.input(|i| {
             (
@@ -1005,6 +1039,19 @@ impl App {
         }
         if new && self.dialog.is_none() {
             self.apply(Action::NewAccount(None));
+        }
+        let digit = ctx.input(|i| {
+            const KEYS: [Key; 9] = [
+                Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5,
+                Key::Num6, Key::Num7, Key::Num8, Key::Num9,
+            ];
+            if !i.modifiers.command || i.modifiers.shift || i.modifiers.alt {
+                return None;
+            }
+            KEYS.iter().position(|k| i.key_pressed(*k)).map(|p| p as u8 + 1)
+        });
+        if let (Some(n), None) = (digit, &self.dialog) {
+            self.show_nth(n);
         }
     }
 
