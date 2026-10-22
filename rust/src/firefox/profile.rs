@@ -103,6 +103,42 @@ pub fn prefs(o: &Options) -> String {
     ] {
         pref(p, k, false);
     }
+    // Firefox's own connections Idlerx does not need: telemetry pings,
+    // sponsored content, the region lookup, push, captive portal checks,
+    // suggestions and Mozilla's messages (it still checks for its own
+    // updates, blocklists and certificates, and the add-ons' updates)
+    for k in [
+        "datareporting.usage.uploadEnabled",
+        "toolkit.telemetry.newProfilePing.enabled",
+        "toolkit.telemetry.shutdownPingSender.enabled",
+        "toolkit.telemetry.firstShutdownPing.enabled",
+        "toolkit.telemetry.updatePing.enabled",
+        "toolkit.telemetry.bhrPing.enabled",
+        "browser.region.update.enabled",
+        "dom.push.enabled",
+        "network.captive-portal-service.enabled",
+        "network.connectivity-service.enabled",
+        "browser.topsites.contile.enabled",
+        "browser.newtabpage.activity-stream.showSponsored",
+        "browser.newtabpage.activity-stream.showSponsoredTopSites",
+        "browser.newtabpage.activity-stream.feeds.topsites",
+        "browser.newtabpage.activity-stream.feeds.section.topstories",
+        "browser.newtabpage.activity-stream.feeds.system.topstories",
+        "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.addons",
+        "browser.newtabpage.activity-stream.asrouter.userprefs.cfr.features",
+        "browser.urlbar.quicksuggest.enabled",
+        "browser.urlbar.suggest.quicksuggest.sponsored",
+        "browser.urlbar.suggest.quicksuggest.nonsponsored",
+        "browser.shopping.experience2023.enabled",
+        "browser.contentanalysis.enabled",
+        "messaging-system.rsexperimentloader.enabled",
+        "nimbus.profilesdatastoreservice.enabled",
+        "geo.enabled",
+    ] {
+        pref(p, k, false);
+    }
+    pref(p, "toolkit.telemetry.server", "data:,");
+    pref(p, "browser.region.network.url", "");
     // uBlock Origin already blocks malware and tracking sites: Firefox's own
     // lists (downloaded and kept in memory) are left out
     for k in [
@@ -161,12 +197,12 @@ pub fn prefs(o: &Options) -> String {
     // the network in the main process (one process less)
     pref(p, "network.process.enabled", false);
     if o.economy {
-        // fewer processes: drawing, media and the extensions (uBlock
-        // Origin, Idlerx's) inside the main one. Measured with 4 accounts:
-        // about 180 MB less. Each account keeps its own page process
-        // (Firefox gives every container its own).
+        // fewer processes: media and the extensions (uBlock Origin,
+        // Idlerx's) inside the main one. Each account keeps its own page
+        // process (Firefox gives every container its own). Drawing stays
+        // in its own process: inside the main one, embedded windows stop
+        // painting.
         pref(p, "fission.webContentIsolationStrategy", 0);
-        pref(p, "layers.gpu-process.enabled", false);
         pref(p, "media.rdd-process.enabled", false);
         pref(p, "extensions.webextensions.remote", false);
     }
@@ -283,5 +319,21 @@ mod tests {
         let plain = prefs(&Options { proxy: None, fps: 0, ..o });
         assert!(plain.contains(r#"user_pref("network.proxy.type", 5);"#));
         assert!(plain.contains(r#"user_pref("layout.frame_rate", -1);"#));
+    }
+}
+
+#[cfg(test)]
+mod print {
+    /// Writes a VPN network's user.js (for the proxy leak test).
+    #[test]
+    #[ignore]
+    fn write_vpn_prefs() {
+        let o = super::Options {
+            economy: true,
+            fps: 30,
+            proxy: Some(18765),
+            debugger: None,
+        };
+        std::fs::write(std::env::var("OUT_USER_JS").unwrap(), super::prefs(&o)).unwrap();
     }
 }

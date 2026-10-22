@@ -1220,6 +1220,41 @@ impl eframe::App for App {
             self.login_offers.retain(|x| x.account != o.account);
             self.login_offers.push(o);
         }
+        // IDLERX_SCREENSHOT=blocker-panel (tests): uBlock Origin's panel of
+        // the first account, once
+        if self.screenshot.as_deref() == Some("blocker-panel") && self.macro_started_once.is_empty() {
+            if let Some((id, p)) = self.panels.iter().find(|(_, p)| p.started.elapsed() > Duration::from_secs(4)) {
+                self.macro_started_once.insert(id.clone());
+                p.open_blocker_panel(200, 200);
+            }
+        }
+        // IDLERX_SCREENSHOT=lifecycle (tests): every account paused at 8 s
+        // (the Firefox closes 20 s later), opened again at 35 s
+        if self.screenshot.as_deref() == Some("lifecycle") {
+            let t = self.created.elapsed().as_secs();
+            if t >= 8 && !self.macro_started_once.contains("paused") {
+                self.macro_started_once.insert("paused".into());
+                let ids: Vec<String> = self.cfg.accounts.iter().map(|a| a.id.clone()).collect();
+                for id in ids {
+                    self.apply(Action::Pause(id));
+                }
+            }
+            if t >= 35 && !self.macro_started_once.contains("opened") {
+                self.macro_started_once.insert("opened".into());
+                let ids: Vec<String> = self.cfg.accounts.iter().map(|a| a.id.clone()).collect();
+                for id in ids {
+                    self.apply(Action::Open(id));
+                }
+            }
+            ctx.request_repaint_after(Duration::from_secs(1));
+        }
+        // IDLERX_SCREENSHOT=login-save (tests): every login offered is saved
+        if self.screenshot.as_deref() == Some("login-save") {
+            let ids: Vec<String> = self.login_offers.iter().map(|o| o.account.clone()).collect();
+            for id in ids {
+                self.apply(Action::LoginChoice(id, LoginChoice::Save));
+            }
+        }
         self.after_update_check(ctx);
         self.sync_vpn();
         self.tray_tick(ctx);
