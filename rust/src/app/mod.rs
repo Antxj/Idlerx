@@ -24,7 +24,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 mod dialogs;
@@ -100,8 +100,6 @@ enum Action {
     ReorderGroup(String, String),
     /// Moves a group one place up (-1) or down (+1).
     MoveGroup(String, i32),
-    /// Frames per second of one account (None = automatic).
-    SetFps(String, Option<u32>),
     ToggleCollapse(String),
     OpenGroup(String),
     PauseGroup(String),
@@ -124,6 +122,21 @@ enum Action {
     Expand(String),
     /// New account dialog, already in a group (or none).
     NewAccount(Option<String>),
+    /// uBlock Origin's panel for an account, at a point of the window.
+    BlockerPanel(String, Pos2),
+    /// Answer to "save this account's password?".
+    LoginChoice(String, LoginChoice),
+    /// The account's saved passwords.
+    ShowPasswords(String),
+    /// Downloads and runs Firefox's official installer.
+    InstallFirefox,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LoginChoice {
+    Save,
+    NotNow,
+    Never,
 }
 
 struct EditState {
@@ -158,6 +171,8 @@ enum Dialog {
     /// Group to delete, and whether its accounts go too.
     ConfirmDeleteGroup(String, bool),
     Macro(macro_edit::MacroEdit),
+    /// Saved passwords of an account.
+    Passwords(String),
 }
 
 pub struct App {
@@ -175,6 +190,12 @@ pub struct App {
     /// shared browser, so only change on restart).
     economy: bool,
     keep_active: bool,
+    /// Frame limit in effect (Firefox's own, set when it starts).
+    fps: u32,
+    /// Logins just made in an account: Idlerx offers to save them.
+    login_offers: Vec<crate::firefox::LoginOffer>,
+    /// Firefox being installed: None while it runs, then the result.
+    firefox_install: Option<Arc<Mutex<Option<Result<(), String>>>>>,
     /// "Restart now" was clicked.
     restart: bool,
     /// The window was shown (maximized when it was closed maximized).
@@ -184,8 +205,6 @@ pub struct App {
     screenshot: Option<String>,
     /// Theme last applied to the pages (setting, dark).
     page_theme: Option<(Theme, bool)>,
-    /// Economy mode: main frame id -> page processes.
-    renderers: Rc<RefCell<panels::Renderers>>,
     metrics: Metrics,
     runtime: Result<String, String>,
     /// Address bar text and the account it belongs to.
@@ -264,15 +283,22 @@ impl App {
             cfg.selected = cfg.display_order().into_iter().next();
         }
 
-        let (economy, keep_active) = (cfg.economy, cfg.keep_active);
+        let (economy, keep_active, fps) = (cfg.economy, cfg.keep_active, cfg.fps_limit);
         let repaint = ctx.clone();
         let tunnels = vpn::Tunnels::new(Arc::new(move || repaint.request_repaint()));
         let repaint = ctx.clone();
         let tray = tray::Tray::new(move || repaint.request_repaint());
-        // ad blocker: lists loaded and refreshed in the background
-        crate::blocker::configure(cfg.block_ads, &cfg.block_allow);
+        // the browser engine (Firefox, see `firefox`)
         let repaint = ctx.clone();
-        crate::blocker::start(move || repaint.request_repaint());
+        if let Err(e) = crate::firefox::init(Arc::new(move || repaint.request_repaint())) {
+            events::log("Idlerx", &format!("motor do navegador não iniciou: {e}"));
+        }
+        let save_passwords = cfg.save_passwords;
+        let keep: Vec<String> = cfg.accounts.iter().map(|a| a.profile.clone()).collect();
+        crate::firefox::with(|e| {
+            e.set_save_passwords(save_passwords);
+            e.set_keep(keep);
+        });
         let screenshot = std::env::var("IDLERX_SCREENSHOT")
             .ok()
             .filter(|v| !v.is_empty());
@@ -314,12 +340,14 @@ impl App {
             hwnd: 0,
             economy,
             keep_active,
+            fps,
+            login_offers: Vec::new(),
+            firefox_install: None,
             restart: false,
             page_theme: None,
             screenshot,
             window_shown: false,
             created: Instant::now(),
-            renderers: Rc::new(RefCell::new(HashMap::new())),
             metrics,
             runtime: panels::runtime_version(),
             address: String::new(),
@@ -476,23 +504,13 @@ impl App {
                 let repaint = ctx.clone();
                 let wake: panels::Wake = Rc::new(move || repaint.request_repaint());
                 let browser = panels::Browser {
-                    keep_active: if self.economy {
-                        self.keep_active
-                    } else {
-                        self.cfg.keep_active
-                    },
+                    keep_active: self.keep_active,
                     economy: self.economy,
                     vpn: gate.as_ref().map(|(g, port)| (g.as_str(), *port)),
                     in_private: self.cfg.in_private(&acc),
+                    fps: self.fps,
                 };
-                let slot = panels::open(
-                    self.hwnd,
-                    &acc,
-                    browser,
-                    self.cfg.save_passwords,
-                    Self::dark(ctx),
-                    wake,
-                );
+                let slot = panels::open(self.hwnd, &acc, browser, wake);
                 self.starting = Some((id, slot));
             }
             _ => {
@@ -699,12 +717,6 @@ impl App {
                 self.cfg.move_group_by(&id, delta);
                 self.mark_dirty();
             }
-            Action::SetFps(id, fps) => {
-                if let Some(a) = self.cfg.account_mut(&id) {
-                    a.fps = fps;
-                    self.mark_dirty();
-                }
-            }
             Action::Expand(id) => {
                 self.cfg.layout = Layout::Tabs;
                 self.cfg.selected = Some(id);
@@ -720,16 +732,59 @@ impl App {
                     error: None,
                 }))
             }
+            Action::BlockerPanel(id, at) => {
+                // the panel opens under the button, in screen pixels
+                let (origin, ppp) = self.ctx.input(|i| {
+                    (
+                        i.viewport().inner_rect.map(|r| r.min).unwrap_or_default(),
+                        i.pixels_per_point(),
+                    )
+                });
+                if let Some(p) = self.panels.get(&id) {
+                    let screen = (origin.to_vec2() + at.to_vec2()) * ppp;
+                    p.open_blocker_panel(screen.x as i32 - 340, screen.y as i32);
+                }
+            }
+            Action::LoginChoice(id, choice) => {
+                let pos = self.login_offers.iter().position(|o| o.account == id);
+                if let (Some(pos), Some(a)) = (pos, self.cfg.account(&id)) {
+                    let o = self.login_offers.remove(pos);
+                    match choice {
+                        LoginChoice::Save => crate::passwords::store(
+                            &a.profile,
+                            crate::passwords::Login {
+                                origin: o.origin,
+                                username: o.username,
+                                password: o.password,
+                            },
+                        ),
+                        LoginChoice::Never => crate::passwords::set_never(&a.profile, &o.origin),
+                        LoginChoice::NotNow => {}
+                    }
+                }
+            }
+            Action::ShowPasswords(id) => self.dialog = Some(Dialog::Passwords(id)),
+            Action::InstallFirefox => {
+                let state = Arc::new(Mutex::new(None));
+                self.firefox_install = Some(state.clone());
+                let repaint = self.ctx.clone();
+                std::thread::spawn(move || {
+                    let r = crate::firefox::install();
+                    *state.lock().unwrap() = Some(r);
+                    repaint.request_repaint();
+                });
+            }
         }
     }
 
     fn remove_account(&mut self, id: &str) {
         self.close_panel(id);
         if let Some(pos) = self.cfg.accounts.iter().position(|a| a.id == id) {
+            // its container goes with the next sync (see `firefox`)
             let a = self.cfg.accounts.remove(pos);
-            self.cfg.pending_delete.push(a.profile.clone());
-            config::delete_profile_later(a.profile);
+            crate::passwords::forget(&a.profile);
         }
+        self.login_offers.retain(|o| o.account != id);
         if self.cfg.selected.as_deref() == Some(id) {
             self.cfg.selected = self.cfg.display_order().into_iter().next();
         }
@@ -742,10 +797,10 @@ impl App {
         let was_open = self.is_open_or_opening(id);
         self.close_panel(id);
         if let Some(a) = self.cfg.account_mut(id) {
+            // a new, empty container; the old one goes with the next sync
             let old = std::mem::replace(&mut a.profile, config::new_id());
             a.last_url = None;
-            self.cfg.pending_delete.push(old.clone());
-            config::delete_profile_later(old);
+            crate::passwords::forget(&old);
         }
         if was_open {
             self.request_open(id);
@@ -799,32 +854,16 @@ impl App {
         }
         self.last_poll = Instant::now();
         let mut changed = false;
+        // CPU and memory: the whole app, and each network's Firefox (the
+        // accounts of a network share its processes)
         let mut pids = HashMap::new();
         pids.insert(metrics::TOTAL.to_string(), vec![std::process::id()]);
+        // containers of deleted accounts (or of cleared data) go away
+        let keep: Vec<String> = self.cfg.accounts.iter().map(|a| a.profile.clone()).collect();
+        crate::firefox::with(|e| e.set_keep(keep));
         self.audio.clear();
-        if self.economy {
-            // which page processes belong to each account (answer arrives
-            // asynchronously and is used on the next round), asked once per
-            // shared browser (groups with a VPN have their own)
-            let mut asked = HashSet::new();
-            for p in self.panels.values() {
-                if asked.insert(p.pid) {
-                    let repaint = ctx.clone();
-                    p.request_renderers(self.renderers.clone(), move || repaint.request_repaint());
-                }
-            }
-        }
-        let renderers = self.renderers.borrow().clone();
         for (id, p) in &self.panels {
-            let roots = if self.economy {
-                p.main_frame_id()
-                    .and_then(|f| renderers.get(&(p.pid, f)).cloned())
-                    .unwrap_or_default()
-            } else {
-                vec![p.pid]
-            };
-            pids.insert(id.clone(), roots);
-            p.request_fps_rate();
+            pids.insert(net_key(p.network()), vec![p.pid]);
             if p.playing_audio() {
                 self.audio.insert(id.clone());
             }
@@ -926,17 +965,6 @@ impl App {
                 self.hwnd = w.hwnd.get();
                 crate::single::set_main_window(self.hwnd);
                 self.window_registered = true;
-            }
-        }
-    }
-
-    /// Frame limit of each page: the selected account draws freely, the
-    /// others at the configured limit (or each account's own choice).
-    fn apply_fps(&self) {
-        for (id, p) in &self.panels {
-            if let Some(a) = self.cfg.account(id) {
-                let selected = self.cfg.selected.as_deref() == Some(id.as_str());
-                p.set_fps(self.cfg.fps_for(a, selected), self.cfg.keep_active);
             }
         }
     }
@@ -1179,6 +1207,19 @@ impl eframe::App for App {
     /// Work that draws nothing; it also runs while the window is minimized.
     fn logic(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.register_window(frame);
+        let installed = self
+            .firefox_install
+            .as_ref()
+            .is_some_and(|s| matches!(*s.lock().unwrap(), Some(Ok(()))));
+        if installed {
+            self.firefox_install = None;
+            self.runtime = panels::runtime_version();
+        }
+        // what came from Firefox: pages' events, windows to put in place
+        for o in crate::firefox::pump() {
+            self.login_offers.retain(|x| x.account != o.account);
+            self.login_offers.push(o);
+        }
         self.after_update_check(ctx);
         self.sync_vpn();
         self.tray_tick(ctx);
@@ -1188,7 +1229,6 @@ impl eframe::App for App {
         self.macro_shot_ready();
         self.poll(ctx);
         self.show_window(ctx);
-        self.apply_fps();
 
         // minimized: every page stops drawing and keeps less memory (the
         // games keep running); ui() places them again when restored
@@ -1341,7 +1381,14 @@ impl eframe::App for App {
 
     fn on_exit(&mut self) {
         self.save();
-        // the pages are closed before the window goes away
+        // the pages are closed before the window goes away, and every
+        // Firefox closes normally (the job ends what is left with Idlerx)
         self.panels.clear();
+        crate::firefox::with(|e| e.shutdown());
     }
+}
+
+/// Metrics key of a network's Firefox.
+pub(super) fn net_key(net: &str) -> String {
+    format!("net:{net}")
 }

@@ -321,6 +321,12 @@ impl App {
                 }
                 Dialog::Macro(st)
             }
+            Dialog::Passwords(id) => {
+                if !self.passwords_dialog(ctx, &id) {
+                    keep = false;
+                }
+                Dialog::Passwords(id)
+            }
             Dialog::ConfirmDeleteGroup(gid, mut with_accounts) => {
                 let name = self
                     .cfg
@@ -579,47 +585,25 @@ impl App {
                     format!("{n} FPS")
                 }
             };
-            egui::Grid::new("fps_grid")
-                .num_columns(2)
-                .spacing([16.0, 6.0])
-                .show(ui, |ui| {
-                    ui.label(tr!(
-                        "Quadros por segundo: conta selecionada",
-                        "Frames per second: selected account"
-                    ));
-                    egui::ComboBox::from_id_salt("fps_selected")
-                        .selected_text(label(self.cfg.fps_selected))
-                        .width(110.0)
-                        .show_ui(ui, |ui| {
-                            for n in [0u32, 120, 60, 30, 15] {
-                                ui.selectable_value(&mut self.cfg.fps_selected, n, label(n));
-                            }
-                        });
-                    ui.end_row();
-                    ui.label(tr!(
-                        "Quadros por segundo: outras contas",
-                        "Frames per second: other accounts"
-                    ));
-                    egui::ComboBox::from_id_salt("fps_limit")
-                        .selected_text(label(self.cfg.fps_limit))
-                        .width(110.0)
-                        .show_ui(ui, |ui| {
-                            for n in [0u32, 60, 30, 15, 10, 5] {
-                                ui.selectable_value(&mut self.cfg.fps_limit, n, label(n));
-                            }
-                        });
-                    ui.end_row();
-                });
+            ui.horizontal(|ui| {
+                ui.label(tr!("Quadros por segundo das páginas", "Frames per second of the pages"));
+                egui::ComboBox::from_id_salt("fps_limit")
+                    .selected_text(label(self.cfg.fps_limit))
+                    .width(110.0)
+                    .show_ui(ui, |ui| {
+                        for n in [0u32, 60, 30, 20, 15, 10] {
+                            ui.selectable_value(&mut self.cfg.fps_limit, n, label(n));
+                        }
+                    });
+            });
             ui.label(
                 RichText::new(tr!(
                     "Jogos idle não precisam desenhar 60 vezes por segundo (nem 144 ou 180, a \
-                     frequência do monitor): limitar economiza bastante CPU e GPU. Cada conta pode \
-                     ter o seu (botão direito › Quadros por segundo); o quadro da grade mostra \
-                     quantos ela realmente desenha.",
+                     frequência do monitor): limitar economiza bastante CPU e GPU. O limite é \
+                     feito pelo próprio Firefox, para todas as contas.",
                     "Idle games do not need to draw 60 times a second (nor 144 or 180, the monitor's \
-                     rate): a limit saves a lot of CPU and GPU. Each account can have its own \
-                     (right click › Frames per second); the grid cell shows how many it really \
-                     draws."
+                     rate): a limit saves a lot of CPU and GPU. The limit is applied by Firefox \
+                     itself, to every account."
                 ))
                 .small()
                 .color(weak(dark)),
@@ -633,18 +617,19 @@ impl App {
                 )
                 .changed()
             {
-                for p in self.panels.values() {
-                    p.set_save_passwords(self.cfg.save_passwords);
-                }
+                let on = self.cfg.save_passwords;
+                crate::firefox::with(|e| e.set_save_passwords(on));
             }
             ui.label(
                 RichText::new(tr!(
-                    "O navegador oferece salvar o login de cada conta e preenche sozinho na \
-                     próxima vez. Cada conta tem as próprias senhas, guardadas neste computador \
-                     e criptografadas pelo Windows (como no Chrome e no Edge); sem sincronização.",
-                    "The browser offers to save each account's login and fills it in next time. \
-                     Each account has its own passwords, kept on this computer and encrypted by \
-                     Windows (like Chrome and Edge); no sync."
+                    "O Idlerx oferece salvar o login de cada conta e preenche sozinho na \
+                     próxima vez. Cada conta tem as próprias senhas (uma conta nunca vê as da \
+                     outra), guardadas neste computador e criptografadas pelo Windows; sem \
+                     sincronização. Botão direito na conta › Senhas salvas.",
+                    "Idlerx offers to save each account's login and fills it in next time. \
+                     Each account has its own passwords (an account never sees another's), \
+                     kept on this computer and encrypted by Windows; no sync. Right-click \
+                     the account › Saved passwords."
                 ))
                 .small()
                 .color(weak(dark)),
@@ -657,26 +642,27 @@ impl App {
             ui.checkbox(
                 &mut self.cfg.economy,
                 tr!(
-                    "Modo econômico: um navegador compartilhado por todas as contas (recomendado)",
-                    "Economy mode: one browser shared by all accounts (recommended)"
+                    "Modo econômico: poucos processos de página para todas as contas (recomendado)",
+                    "Economy mode: a few page processes for all accounts (recommended)"
                 ),
             );
             ui.label(
                 RichText::new(tr!(
-                    "Gasta bem menos memória (cerca de 100 MB a menos por conta). As contas \
-                     continuam isoladas (login, cookies e cache próprios), mas se o navegador \
-                     compartilhado travar, todas caem juntas. Os logins de cada modo ficam \
-                     guardados separados: ao trocar, entre nos jogos de novo uma vez.",
-                    "Uses much less memory (about 100 MB less per account). Accounts stay \
-                     isolated (their own login, cookies and cache), but if the shared browser \
-                     crashes, all of them go down together. Each mode keeps its own logins: \
-                     after switching, log in to the games once again."
+                    "Gasta bem menos memória: contas do mesmo jogo dividem processos. As contas \
+                     continuam isoladas (login, cookies e dados próprios), mas se um desses \
+                     processos travar, as contas nele recarregam juntas. Desligado: um processo \
+                     por conta e site (mais memória, isolamento total).",
+                    "Uses much less memory: accounts of the same game share processes. Accounts \
+                     stay isolated (their own login, cookies and data), but if one of those \
+                     processes crashes, the accounts in it reload together. Off: one process \
+                     per account and site (more memory, full isolation)."
                 ))
                 .small()
                 .color(weak(dark)),
             );
             let needs_restart = self.cfg.economy != self.economy
-                || (self.economy && self.cfg.keep_active != self.keep_active);
+                || self.cfg.keep_active != self.keep_active
+                || self.cfg.fps_limit != self.fps;
             if needs_restart {
                 ui.horizontal(|ui| {
                     ui.label(
@@ -787,7 +773,7 @@ impl App {
                 }
                 if let Ok(v) = &self.runtime {
                     ui.label(
-                        RichText::new(format!("· WebView2 {v}"))
+                        RichText::new(format!("· Firefox {v}"))
                             .small()
                             .color(weak(dark)),
                     );
@@ -804,9 +790,6 @@ impl App {
             close
         });
 
-        if self.cfg.block_ads != before.block_ads || self.cfg.block_allow != before.block_allow {
-            crate::blocker::configure(self.cfg.block_ads, &self.cfg.block_allow);
-        }
         if self.cfg.language != before.language {
             i18n::apply(
                 self.cfg
@@ -918,75 +901,83 @@ fn confirm(ctx: &egui::Context, title: &str, text: &str, yes: &str) -> Option<bo
 }
 
 impl App {
-    /// Ad blocker part of the settings.
+    /// Ad blocker part of the settings: uBlock Origin, in every account.
     fn blocker_settings(&mut self, ui: &mut egui::Ui) {
         let dark = ui.visuals().dark_mode;
-        ui.checkbox(
-            &mut self.cfg.block_ads,
-            tr!("Bloquear anúncios e rastreadores", "Block ads and trackers"),
-        )
-        .on_hover_text(tr!(
-            "Com o motor do navegador Brave e as listas que o uBlock Origin usa: filtros do              uBlock, EasyList, EasyPrivacy e a lista de Peter Lowe. Vale para todas as contas,              inclusive InPrivate. Ligar ou desligar vale para as contas abertas depois.",
-            "With the Brave browser's engine and the lists uBlock Origin uses: uBlock filters,              EasyList, EasyPrivacy and Peter Lowe's list. Applies to every account, InPrivate              included. Turning it on or off applies to accounts opened afterwards."
+        ui.label(tr!(
+            "Anúncios e rastreadores: uBlock Origin",
+            "Ads and trackers: uBlock Origin"
         ));
-        if !self.cfg.block_ads {
-            return;
+        ui.label(
+            RichText::new(tr!(
+                "A extensão completa, em todas as contas (inclusive InPrivate), com as listas \
+                 dela atualizadas sozinhas. Para liberar um site ou remover um banner teimoso: \
+                 o escudo 🛡 no cabeçalho da conta.",
+                "The full extension, in every account (InPrivate included), with its lists \
+                 updated by themselves. To allow a site or remove a stubborn banner: the \
+                 shield 🛡 in the account's header."
+            ))
+            .small()
+            .color(weak(dark)),
+        );
+        if ui
+            .small_button(tr!("Painel do uBlock Origin", "uBlock Origin dashboard"))
+            .clicked()
+        {
+            crate::firefox::with(|e| e.open_blocker_dashboard());
         }
-        let st = crate::blocker::status();
-        ui.horizontal(|ui| {
-            let mut line = if st.rules > 0 {
-                trf!(
-                    "{} regras · {} bloqueados nesta sessão",
-                    "{} rules · {} blocked this session",
-                    st.rules,
-                    crate::blocker::blocked()
-                )
-            } else {
-                tr!("Baixando as listas…", "Downloading the lists…").to_string()
-            };
-            if let Some(age) = st.updated.and_then(|t| t.elapsed().ok()) {
-                line.push_str(&trf!(
-                    " · listas de {}",
-                    " · lists from {}",
-                    metrics::fmt_duration(age)
-                ));
-                line.push_str(tr!(" atrás", " ago"));
-            }
-            ui.label(RichText::new(line).small().color(weak(dark)));
-            if st.updating {
-                ui.spinner();
-            } else if ui
-                .small_button(tr!("Atualizar listas", "Update lists"))
-                .clicked()
-            {
-                crate::blocker::refresh_now();
-            }
-        });
-        if let Some(e) = &st.error {
-            ui.label(RichText::new(e).small().color(DANGER));
-        }
-        egui::CollapsingHeader::new(tr!("Sites liberados", "Allowed sites"))
-            .id_salt("block_allow")
-            .show(ui, |ui| {
+    }
+}
+
+impl App {
+    /// Saved passwords of an account: which sites and user names, and
+    /// deleting them (the passwords themselves are never shown).
+    /// Returns false when it should close.
+    fn passwords_dialog(&mut self, ctx: &egui::Context, id: &str) -> bool {
+        let Some(a) = self.cfg.account(id).cloned() else {
+            return false;
+        };
+        let list = crate::passwords::list(&a.profile);
+        let modal = egui::Modal::new(egui::Id::new("passwords")).show(ctx, |ui| {
+            let dark = ui.visuals().dark_mode;
+            ui.set_width(440.0);
+            ui.heading(trf!("Senhas salvas · {}", "Saved passwords · {}", a.name));
+            ui.label(
+                RichText::new(tr!(
+                    "Só desta conta, guardadas neste computador e criptografadas pelo Windows. \
+                     O Idlerx preenche sozinho quando a página de login abre.",
+                    "This account's only, kept on this computer and encrypted by Windows. \
+                     Idlerx fills them in when the login page opens."
+                ))
+                .small()
+                .color(weak(dark)),
+            );
+            ui.add_space(8.0);
+            if list.is_empty() {
                 ui.label(
-                    RichText::new(tr!(
-                        "Um por linha (ex.: jogo.com.br): nada é bloqueado nas páginas deles.",
-                        "One per line (e.g. game.com): nothing is blocked on their pages."
-                    ))
-                    .small()
-                    .color(weak(dark)),
+                    RichText::new(tr!("Nenhuma senha salva.", "No saved password."))
+                        .color(weak(dark)),
                 );
-                let mut text = self.cfg.block_allow.join("\n");
-                if ui
-                    .add(
-                        egui::TextEdit::multiline(&mut text)
-                            .desired_rows(3)
-                            .desired_width(f32::INFINITY),
-                    )
-                    .changed()
-                {
-                    self.cfg.block_allow = text.split('\n').map(String::from).collect();
+            }
+            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                for l in &list {
+                    ui.horizontal(|ui| {
+                        ui.label(config::host_of(&l.origin));
+                        ui.label(RichText::new(&l.username).color(weak(dark)));
+                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                            if ui
+                                .small_button(tr!("Excluir", "Delete"))
+                                .clicked()
+                            {
+                                crate::passwords::remove(&a.profile, &l.origin, &l.username);
+                            }
+                        });
+                    });
                 }
             });
+            ui.add_space(8.0);
+            ui.button(tr!("Fechar", "Close")).clicked()
+        });
+        !(modal.inner || modal.should_close())
     }
 }

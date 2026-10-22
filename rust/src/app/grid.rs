@@ -18,31 +18,55 @@ impl App {
 
         if let Err(e) = &self.runtime {
             let e = e.clone();
+            let installing = self.firefox_install.as_ref().map(|r| r.lock().unwrap().clone());
             centered(ui, rect, |ui| {
                 ui.label(RichText::new("⚠").size(36.0).color(FAVORITE));
                 ui.label(
-                    RichText::new(tr!(
-                        "O WebView2 Runtime não foi encontrado",
-                        "WebView2 Runtime was not found"
-                    ))
-                    .size(18.0)
-                    .strong(),
+                    RichText::new(tr!("O Idlerx precisa do Firefox", "Idlerx needs Firefox"))
+                        .size(18.0)
+                        .strong(),
                 );
                 ui.label(tr!(
-                    "O Idlerx usa o motor do Microsoft Edge (WebView2) para abrir as contas. \
-                     Ele já vem no Windows 11; instale pelo site oficial da Microsoft e abra o Idlerx de novo.",
-                    "Idlerx uses the Microsoft Edge engine (WebView2) to open the accounts. \
-                     It ships with Windows 11; install it from Microsoft's official site and open Idlerx again."
+                    "As contas abrem no Firefox, cada uma num contêiner isolado, com o uBlock \
+                     Origin. O Idlerx usa perfis próprios: o seu Firefox de sempre não muda.",
+                    "Accounts open in Firefox, each in an isolated container, with uBlock \
+                     Origin. Idlerx uses profiles of its own: your everyday Firefox does not change."
                 ));
                 ui.label(RichText::new(e).small().color(weak(dark)));
+                ui.add_space(6.0);
+                match &installing {
+                    Some(None) => {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label(tr!(
+                                "Baixando o instalador oficial da Mozilla…",
+                                "Downloading Mozilla's official installer…"
+                            ));
+                        });
+                    }
+                    Some(Some(Err(err))) => {
+                        ui.label(RichText::new(err).color(DANGER));
+                    }
+                    _ => {}
+                }
+                if !matches!(installing, Some(None))
+                    && ui
+                        .add(
+                            egui::Button::new(
+                                RichText::new(tr!("Instalar o Firefox", "Install Firefox"))
+                                    .color(Color32::WHITE),
+                            )
+                            .fill(ACCENT),
+                        )
+                        .clicked()
+                {
+                    actions.push(Action::InstallFirefox);
+                }
                 if ui
-                    .button(tr!(
-                        "Baixar o WebView2 Runtime",
-                        "Download WebView2 Runtime"
-                    ))
+                    .link(tr!("Ou baixe no site da Mozilla", "Or download it from Mozilla's site"))
                     .clicked()
                 {
-                    let _ = open::that(panels::RUNTIME_DOWNLOAD_URL);
+                    let _ = open::that("https://www.mozilla.org/firefox/");
                 }
             });
             return;
@@ -88,7 +112,8 @@ impl App {
                     return;
                 };
                 if self.panels.contains_key(&a.id) {
-                    placements.insert(a.id.clone(), rect);
+                    let page = self.login_bar(ui, rect, &a.id, actions);
+                    placements.insert(a.id.clone(), page);
                 } else {
                     self.placeholder(ui, rect, &a, actions);
                 }
@@ -270,6 +295,7 @@ impl App {
                 self.cell_header(ui, h, &a, actions);
             }
             if self.panels.contains_key(id) {
+                let page = self.login_bar(ui, page, id, actions);
                 placements.insert(id.clone(), page.shrink2(Vec2::new(1.0, 1.0)));
             } else {
                 self.placeholder(ui, page, &a, actions);
@@ -301,32 +327,22 @@ impl App {
             self.panels.contains_key(&a.id),
         );
 
-        let mut usage = String::new();
-        if let (Some(p), Some(u)) = (self.panels.get(&a.id), self.metrics.get(&a.id)) {
-            usage = format!(
-                "{} · {}",
-                metrics::fmt_duration(p.started.elapsed()),
-                usage_text(u)
-            );
-            // frames actually drawn, measured inside the page (and the limit)
-            let selected = self.cfg.selected.as_deref() == Some(a.id.as_str());
-            let limit = self.cfg.fps_for(a, selected);
-            match (p.fps_rate(), limit) {
-                (Some(rate), 0) => usage.push_str(&format!(" · {rate} FPS")),
-                (Some(rate), l) => usage.push_str(&format!(" · {rate}/{l} FPS")),
-                (None, l) if l > 0 => usage.push_str(&format!(" · ≤{l} FPS")),
-                _ => {}
-            }
-        }
+        let usage = self
+            .panels
+            .get(&a.id)
+            .map(|p| metrics::fmt_duration(p.started.elapsed()))
+            .unwrap_or_default();
 
         // buttons from the right
         let mut x = rect.right() - 4.0;
+        let mut last = Rect::NOTHING;
         let mut button = |icon: &str, hint: &str| -> bool {
             let r = Rect::from_min_size(
                 Pos2::new(x - 24.0, rect.top() + 2.0),
                 Vec2::new(24.0, rect.height() - 4.0),
             );
             x -= 26.0;
+            last = r;
             ui.place(r, egui::Button::new(icon).frame(false))
                 .bar_tip(hint)
                 .clicked()
@@ -349,11 +365,22 @@ impl App {
         if button(mute, mute_hint) {
             actions.push(Action::ToggleMute(a.id.clone()));
         }
+        if self.panels.contains_key(&a.id)
+            && button(
+                "🛡",
+                tr!(
+                    "uBlock Origin desta conta: liberar o site, remover um elemento…",
+                    "uBlock Origin for this account: allow the site, remove an element…"
+                ),
+            )
+        {
+            actions.push(Action::BlockerPanel(a.id.clone(), last.left_bottom()));
+        }
 
         let usage_w = if usage.is_empty() || rect.width() < 420.0 {
             0.0
         } else {
-            230.0
+            70.0
         };
         if usage_w > 0.0 {
             painter.text(
@@ -379,5 +406,60 @@ impl App {
             ui.visuals().strong_text_color(),
             max_w,
         );
+    }
+
+    /// "Save this account's password?" above the page, after a login.
+    /// Returns what is left for the page.
+    pub(super) fn login_bar(
+        &self,
+        ui: &mut egui::Ui,
+        rect: Rect,
+        id: &str,
+        actions: &mut Vec<Action>,
+    ) -> Rect {
+        let Some(offer) = self.login_offers.iter().find(|o| o.account == id) else {
+            return rect;
+        };
+        const H: f32 = 30.0;
+        let dark = ui.visuals().dark_mode;
+        let bar = Rect::from_min_size(rect.min, Vec2::new(rect.width(), H));
+        ui.painter()
+            .rect_filled(bar, CornerRadius::ZERO, panel_bg(dark));
+        let site = config::host_of(&offer.origin).to_string();
+        let who = if offer.username.is_empty() {
+            site.clone()
+        } else {
+            format!("{} · {site}", offer.username)
+        };
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(bar.shrink2(Vec2::new(8.0, 3.0)))
+                .layout(egui::Layout::left_to_right(Align::Center)),
+        );
+        child.label(RichText::new("🔑").color(ACCENT));
+        child.label(
+            RichText::new(trf!(
+                "Salvar a senha desta conta ({who})?",
+                "Save this account's password ({who})?"
+            ))
+            .small(),
+        );
+        let account = id.to_string();
+        if child
+            .add(egui::Button::new(RichText::new(tr!("Salvar", "Save")).small().color(Color32::WHITE)).fill(ACCENT))
+            .clicked()
+        {
+            actions.push(Action::LoginChoice(account.clone(), LoginChoice::Save));
+        }
+        if child.small_button(tr!("Agora não", "Not now")).clicked() {
+            actions.push(Action::LoginChoice(account.clone(), LoginChoice::NotNow));
+        }
+        if child
+            .small_button(tr!("Nunca neste site", "Never on this site"))
+            .clicked()
+        {
+            actions.push(Action::LoginChoice(account, LoginChoice::Never));
+        }
+        Rect::from_min_max(Pos2::new(rect.left(), rect.top() + H), rect.max)
     }
 }

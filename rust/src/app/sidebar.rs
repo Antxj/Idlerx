@@ -519,44 +519,12 @@ impl App {
                 }
             },
         );
-        ui.menu_button(
-            tr!(
-                "      Quadros por segundo (FPS)",
-                "      Frames per second (FPS)"
-            ),
-            |ui| {
-                let n = |v: u32| {
-                    if v == 0 {
-                        tr!("sem limite", "no limit").to_string()
-                    } else {
-                        v.to_string()
-                    }
-                };
-                let auto = trf!(
-                    "Automático ({} selecionada, {} nas outras)",
-                    "Automatic ({} when selected, {} otherwise)",
-                    n(self.cfg.fps_selected),
-                    n(self.cfg.fps_limit)
-                );
-                if ui.selectable_label(a.fps.is_none(), auto).clicked() {
-                    actions.push(Action::SetFps(id(), None));
-                }
-                if ui
-                    .selectable_label(a.fps == Some(0), tr!("Sempre sem limite", "Never limited"))
-                    .clicked()
-                {
-                    actions.push(Action::SetFps(id(), Some(0)));
-                }
-                for n in [60u32, 30, 15, 10, 5] {
-                    if ui
-                        .selectable_label(a.fps == Some(n), trf!("Sempre {n}", "Always {n}"))
-                        .clicked()
-                    {
-                        actions.push(Action::SetFps(id(), Some(n)));
-                    }
-                }
-            },
-        );
+        if ui
+            .button(tr!("🔑  Senhas salvas…", "🔑  Saved passwords…"))
+            .clicked()
+        {
+            actions.push(Action::ShowPasswords(id()));
+        }
         let grid = if a.in_grid {
             tr!("☐  Tirar da grade", "☐  Hide from grid")
         } else {

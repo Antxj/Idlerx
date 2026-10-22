@@ -7,13 +7,13 @@
 #[macro_use]
 mod i18n;
 mod app;
-mod blocker;
 mod config;
 mod events;
+mod firefox;
 mod macros;
 mod metrics;
 mod panels;
-mod popup;
+mod passwords;
 mod single;
 mod tray;
 mod update;
@@ -26,6 +26,10 @@ pub const ICON_RGBA: &[u8] = include_bytes!("../assets/icon_64.rgba");
 
 fn main() -> eframe::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    // started by Firefox as the extension's native app: only relays
+    if firefox::host::is_host_call(&args) {
+        firefox::host::run();
+    }
     // elevated helper (UAC): authorizes the user for the OpenVPN service
     if let Some(user) = args
         .iter()

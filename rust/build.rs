@@ -1,7 +1,10 @@
 // Embeds the icon, the manifest and the version information into the .exe.
 // The .rc file is generated here so its version always matches Cargo.toml.
 //
-// Also embeds the official OpenVPN installer (assets/openvpn.msi), used by
+// Also embeds Idlerx's Firefox extension signed by Mozilla
+// (assets/idlerx-firefox.xpi, made by the release workflow; without it a
+// development build installs the extension from firefox/extension for each
+// session) and the official OpenVPN installer (assets/openvpn.msi), used by
 // the VPN of groups. The MSI is NOT in the repository: build-release.ps1
 // downloads it and verifies its SHA-256 and signature. Without the file the
 // executable has no installer (the app points to the download page).
@@ -17,13 +20,15 @@ fn main() {
     println!("cargo:rerun-if-changed=assets/icon.ico");
     println!("cargo:rerun-if-changed=assets/app.manifest");
     println!("cargo:rerun-if-changed=assets/openvpn.msi");
+    println!("cargo:rerun-if-changed=assets/idlerx-firefox.xpi");
     embed_openvpn_msi();
+    embed_optional("assets/idlerx-firefox.xpi", "idlerx-firefox.xpi", "IDLERX_FIREFOX_XPI");
 
     if std::env::var_os("CARGO_CFG_WINDOWS").is_none() {
         return;
     }
-    // with the GNU toolchain the WebView2 loader is a separate DLL (and the
-    // C runtime is not static): the single executable needs MSVC
+    // with the GNU toolchain the C runtime is not static: the single
+    // executable needs MSVC
     if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("gnu") {
         panic!(
             "Idlerx must be built with the MSVC toolchain: run \
@@ -93,4 +98,15 @@ fn embed_openvpn_msi() {
     }
     println!("cargo:rustc-env=IDLERX_OPENVPN_MSI={}", out.display());
     println!("cargo:rustc-env=IDLERX_OPENVPN_MSI_VERSION={OPENVPN_MSI_VERSION}");
+}
+
+/// Embeds an optional asset (an empty file when it is missing).
+fn embed_optional(source: &str, name: &str, env: &str) {
+    let out = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR")).join(name);
+    if Path::new(source).exists() {
+        std::fs::copy(source, &out).expect("copy asset");
+    } else {
+        std::fs::write(&out, b"").expect("write an empty asset");
+    }
+    println!("cargo:rustc-env={env}={}", out.display());
 }
