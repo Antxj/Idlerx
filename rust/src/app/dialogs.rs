@@ -694,10 +694,10 @@ impl App {
                 RichText::new(tr!(
                     "Impede o navegador de desacelerar páginas escondidas ou atrás de outras, \
                      e o jogo de uma conta fora da tela continua rodando (a 5 quadros por \
-                     segundo). Vale para as contas abertas depois da mudança.",
+                     segundo). Vale ao reiniciar o Idlerx.",
                     "Stops the browser from slowing down hidden or covered pages, and the \
                      game of an account off screen keeps running (at 5 frames per second). \
-                     Applies to accounts opened after the change."
+                     Applies after restarting Idlerx."
                 ))
                 .small()
                 .color(weak(dark)),

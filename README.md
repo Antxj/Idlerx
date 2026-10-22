@@ -6,9 +6,7 @@
 
 <p align="center"><b>All your accounts, one window.</b><br>
 Several accounts of the same browser game open at once, each one isolated,
-side by side, lightweight, with a VPN per group and macros.</p>
-
-<p align="center"><b>English</b> | <a href="README.pt-BR.md">Português</a></p>
+side by side, with the full uBlock Origin, a VPN per group and macros.</p>
 
 <p align="center">
   <a href="https://github.com/Antxj/Idlerx/releases/latest"><img src="https://img.shields.io/github/v/release/Antxj/Idlerx?label=Free%20download&style=for-the-badge&color=14b8a6" alt="Download the latest version"></a>
@@ -30,42 +28,46 @@ source. Two "Dark Room" accounts run side by side, each with its own save.</sub>
 ## Why Idlerx
 
 Playing with several accounts in a browser is usually a mess: private
-windows, Chrome profiles, one account logging the other out, a sluggish
+windows, browser profiles, one account logging the other out, a sluggish
 computer. Idlerx sorts it out:
 
-- 🔒 **Every account truly isolated**: its own login, cookies and progress.
-  Log in to several accounts of the same game at once, none logs the other
-  out.
+- 🔒 **Every account truly isolated**: its own login, cookies, saves and
+  passwords. Log in to several accounts of the same game at once, none logs
+  the other out.
 - 🪟 **Everything in one window**: one account at a time or all side by
   side in a grid.
+- 🛡️ **The full uBlock Origin** on every account: no ads, trackers or
+  pop-ups.
 - 🌐 **A VPN per group**: each group of accounts goes out through its own
   VPN, with a kill switch, without touching the rest of the computer.
 - 🖱️ **Macros that don't take over your mouse**: record by playing and the
   account repeats your clicks and keys while you keep using your PC.
-- 🛡️ **No ads or trackers**: a built-in blocker with the same lists as
-  uBlock Origin, on every account.
-- 🍃 **Lightweight**: games don't need 60 frames a second or all your
-  memory.
-- 🌙 **Always running**: minimize it or send it to the tray and the games
-  keep going.
+- 🌙 **Always running**: hidden, minimized or in the tray, the games keep
+  going.
 
 ## Features
 
 ### Accounts and organization
 
+- **Firefox inside**: every account is a Firefox container, shown in its
+  own place in Idlerx's window. Idlerx uses Firefox profiles of its own:
+  your everyday Firefox does not change.
 - **One at a time or in a grid**: an automatic grid that fits the window,
   or a fixed shape (side by side, stacked, 2×2, 3×2, 3×3… or any columns
   and rows). Drag an account from the list onto a grid cell.
-- **Groups**: sort accounts by game, server or anything you like. Click a
-  group to see only its accounts in the grid; open or pause a whole group
-  at once; drag accounts and groups to rearrange them.
-- **Focus mode** (F11): just the game, no list or bar.
+- **Groups**: sort accounts by game, server or anything you like, each
+  with a color if you want. Click a group to see only its accounts in the
+  grid; open or pause a whole group at once; drag accounts and groups to
+  rearrange them.
+- **Shortcuts**: Ctrl+1…9 shows the account at that place of the list, also
+  from inside a game. F11 is focus mode: just the game, no list or bar.
 - **Sound and zoom per account**, address bar, favorites, rename, drag to
   reorder.
-- **Saved passwords per account**, encrypted by Windows, never synced
-  anywhere.
-- **Pause** an account to free all its memory; it is still logged in when
-  you open it again.
+- **Saved passwords per account**: Idlerx offers to save each login and
+  fills it in next time. One account never sees another's passwords. They
+  stay on your computer, encrypted by Windows, never synced anywhere.
+- **Pause** an account to free its memory; it is still logged in when you
+  open it again.
 - **InPrivate mode**, for a whole group or a single account: the account
   keeps nothing (cookies, logins, passwords, site data) and always opens on
   a blank page. Pausing it or closing Idlerx wipes everything. Note: games
@@ -75,6 +77,15 @@ computer. Idlerx sorts it out:
 
 <p align="center"><img src="docs/en/grid_menu.png" width="420" alt="Grid shape picker"></p>
 
+### Ad and tracker blocker
+
+[uBlock Origin](https://github.com/gorhill/uBlock), the full extension, is
+installed in every account, InPrivate included, with its default lists kept
+up to date by itself. Ads, trackers, malware sites and pop-ups are blocked.
+The shield 🛡 in an account's header opens uBlock Origin's own panel for
+that page: turn blocking off on a site, or pick an element (a stubborn
+banner) and remove it.
+
 ### A VPN per group
 
 Choose an OpenVPN `.ovpn` file for a group and its accounts reach the
@@ -82,10 +93,11 @@ internet **only through the VPN**:
 
 - **Kill switch**: if the VPN drops, the group's accounts stay offline until
   it is back. They never go out through your own connection.
-- **No leaks**: DNS through the VPN, WebRTC without revealing your IP, IPv6
-  blocked. Checked on browserleaks.com.
+- **No leaks**: names resolved through the VPN, WebRTC without revealing
+  your IP, IPv6 blocked.
 - **The rest of your PC is untouched**: only that group uses the VPN; other
-  groups and your other programs keep your regular connection.
+  groups and your other programs keep your regular connection. Each group
+  with a VPN has a Firefox of its own.
 - **One VPN per group, several at the same time.**
 - Login by certificate, username and password, or a **Google
   Authenticator token** (the 6-digit code is generated for you).
@@ -118,45 +130,25 @@ with the account hidden, minimized or in the tray.
 
 Right-click the account › **Record a macro** or **Macro…**
 
-### Ad and tracker blocker
+### Light and always running
 
-Built in and **on by default for every account**, InPrivate included.
-
-- **The Brave browser's engine** ([adblock-rust](https://github.com/brave/adblock-rust))
-  with **the lists uBlock Origin uses by default**: uBlock filters,
-  EasyList, EasyPrivacy and Peter Lowe's list.
-- **Blocks** ad scripts, trackers and malware, and **hides the spots** where
-  ads would be.
-- **No pop-ups**: ad windows, and any window a site tries to open on its
-  own, without a click, are not opened. Windows you open by clicking (a
-  login, a link) work normally.
-- **Lists always up to date**: downloaded by themselves and refreshed once
-  a day.
-- **Allowed sites**: a list of sites where nothing is blocked, in case a
-  game complains.
-- Fewer ads also means less CPU, memory and bandwidth used.
-
-Settings › **Block ads and trackers**.
-
-### Lightweight and always running
-
-- **Frame limit**: 60 FPS on the selected account and 30 on the others by
-  default (adjustable, per account too). With four animated games in the
-  grid, CPU use went from 25% to 6%.
-- **Economy mode** (on by default): the accounts share one browser, using
-  about 40% less memory.
-- **Off screen, nothing wasted**: hidden accounts don't draw and use less
-  memory, but the game keeps going: timers at full speed and the game loop
-  running at 5 frames per second. Minimized, Idlerx uses about ten times
-  less CPU.
+- **Frame limit**: Firefox itself draws at most 30 frames per second by
+  default (adjustable). Idle games do not need more, and it saves a lot of
+  CPU and GPU.
+- **Economy mode** (on by default): fewer Firefox processes for all the
+  accounts.
+- **Off screen, nothing wasted**: hidden accounts don't draw, but the game
+  keeps going: timers at full speed and the game loop running at 5 frames
+  per second.
 - **System tray**: the X sends it to the tray and the games keep going. The
   icon gets a red dot if a group's VPN drops, and Windows tells you when it
   drops and when it is back.
-- **Self-healing**: a page that crashes or freezes reloads by itself.
-- **CPU and RAM** of each account, each group and the total, always in
-  sight.
-- **Pages log**: when each account loaded, reloaded (and why), was hidden or
-  shown. Handy to understand what happened while you were away.
+- **Self-healing**: if an account's Firefox closes, the account opens again
+  by itself.
+- **CPU and RAM** of the whole app, of each Firefox and of each group with
+  a VPN, always in sight.
+- **Pages log**: when each account loaded, was hidden or shown, and what
+  Firefox did. Handy to understand what happened while you were away.
 
 <p align="center"><img src="docs/en/settings.png" width="420" alt="Settings"></p>
 
@@ -166,16 +158,24 @@ Settings › **Block ads and trackers**.
    page.
 2. **Open it**. The first time, Windows may show "unrecognized app": click
    **More info** › **Run anyway**.
-3. **+ New account**: paste the game address and give it a name.
-4. Repeat for your other accounts and pick **Single** or **Grid** at the
+3. If Firefox is not installed, click **Install Firefox** (Mozilla's
+   official installer).
+4. **+ New account**: paste the game address and give it a name.
+5. Repeat for your other accounts and pick **Single** or **Grid** at the
    top right.
 
 Right-clicking an account or a group shows every option.
 
-**Requirements:** Windows 10 or 11. Idlerx uses the Microsoft Edge engine
-(WebView2), which ships with Windows 11 and comes through Windows Update on
-Windows 10. Sites work as they do in Edge or Chrome. The interface is in
-English and Brazilian Portuguese, following the Windows language.
+**Requirements:** Windows 10 or 11 and Firefox 128 or newer. The interface
+is in English and Brazilian Portuguese, following the Windows language.
+
+### Coming from Idlerx 0.x
+
+Versions up to 0.10 used the Microsoft Edge engine (WebView2). On the first
+start, each account brings its logins (cookies), saved passwords and the
+saves games keep in the browser (localStorage) over to Firefox, by itself.
+If a game asks you to log in, do it once. The old Edge data stays until you
+delete it in **Settings › Delete Edge data**.
 
 ## FAQ
 
@@ -183,10 +183,14 @@ English and Brazilian Portuguese, following the Windows language.
 Yes, and it always will be: no ads, no paid version, no sign-up. The source
 is open (GPL-3.0).
 
+**Does it change my Firefox?**
+No. Idlerx uses Firefox profiles of its own, in its own folder. Your
+everyday Firefox, its tabs, add-ons and settings are not touched.
+
 **Where do my accounts and passwords live?**
-Only on your computer. Each account's logins stay in its own profile
-folder, and VPN passwords and tokens are encrypted by Windows. Nothing goes
-to any server.
+Only on your computer. Each account's logins stay in its container, and
+saved passwords, VPN passwords and tokens are encrypted by Windows. Nothing
+goes to any server.
 
 **Does Idlerx update itself?**
 It checks for a new version right after opening and then every hour, and
@@ -200,24 +204,27 @@ version is built straight from this repository's source, and you can check
 it: see [Security](#security).
 
 **Do I need to install anything?**
-No. It is a single file. OpenVPN is only needed if you use a VPN in your
-groups, and Idlerx offers to install it.
+Only Firefox, which Idlerx offers to install. OpenVPN is only needed if you
+use a VPN in your groups, and Idlerx offers to install it too.
 
 ## Privacy
 
 Idlerx does not collect or send any data. Its only connections are the
 **sites you open**, the **version check** on GitHub (with none of your
-data), the daily download of the **ad blocker's lists** (from
-`ublockorigin.github.io`, `easylist.to` and `pgl.yoyo.org`, with none of
-your data; with the blocker off nothing is downloaded) and, in groups with a
-VPN, **your VPN server** and one request to `api.ipify.org` **through the
-VPN itself**, to show the IP the sites see.
+data), downloading **uBlock Origin** once from Mozilla's add-ons site, and,
+in groups with a VPN, **your VPN server** and one request to
+`api.ipify.org` **through the VPN itself**, to show the IP the sites see.
+
+In Idlerx's Firefox profiles, telemetry, studies, sponsored content and
+suggestions are turned off. Firefox still checks its own updates,
+blocklists and certificates, and uBlock Origin keeps its lists up to date.
 
 ## Security
 
 Every version is built exclusively by the
 [release workflow](.github/workflows/release.yml) on GitHub Actions, from
-this repository's source. To check your copy:
+this repository's source. Idlerx's Firefox extension is signed by Mozilla
+in the same workflow. To check your copy:
 
 ```powershell
 Get-FileHash .\Idlerx.exe -Algorithm SHA256
@@ -237,12 +244,14 @@ before using it.
 
 ## Where the data lives
 
-- Settings, accounts and the pages log: `%APPDATA%\Idlerx\`
-- Browser profiles (logins, cookies, cache) of each account:
-  `%LOCALAPPDATA%\Idlerx\profiles\`
+- Settings, accounts, saved passwords and the pages log: `%APPDATA%\Idlerx\`
+- Firefox profiles (logins, cookies, cache) of the accounts:
+  `%LOCALAPPDATA%\Idlerx\profiles\firefox\`
 
 **Uninstall:** close Idlerx and delete `Idlerx.exe`. To also remove the
-accounts, delete the `%APPDATA%\Idlerx` and `%LOCALAPPDATA%\Idlerx` folders.
+accounts, delete the `%APPDATA%\Idlerx` and `%LOCALAPPDATA%\Idlerx` folders
+and the registry key
+`HKEY_CURRENT_USER\Software\Mozilla\NativeMessagingHosts\io.github.antxj.idlerx`.
 
 ## License
 

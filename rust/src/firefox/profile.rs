@@ -9,8 +9,14 @@ use std::path::{Path, PathBuf};
 /// is then installed for the session through the debugger, see `rdp`).
 static XPI: &[u8] = include_bytes!(env!("IDLERX_FIREFOX_XPI"));
 pub const EXTENSION_ID: &str = "idlerx@antxj.github.io";
-/// Folder of the extension's source (development builds).
-pub const EXTENSION_SOURCE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../firefox/extension");
+/// Folder of the extension's source (development builds: the executable is
+/// in rust	arget\<profile>, the source in firefox\extension).
+pub fn extension_source() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let repo = exe.parent()?.parent()?.parent()?.parent()?;
+    let dir = repo.join("firefox").join("extension");
+    dir.join("manifest.json").exists().then_some(dir)
+}
 
 const UBLOCK_ID: &str = "uBlock0@raymondhill.net";
 const UBLOCK_URL: &str =

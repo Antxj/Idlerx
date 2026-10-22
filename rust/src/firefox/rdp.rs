@@ -55,11 +55,14 @@ pub fn install_extension(port: u16) -> Result<(), String> {
             break a.to_string();
         }
     };
-    let path = std::fs::canonicalize(super::profile::EXTENSION_SOURCE)
-        .map_err(|e| e.to_string())?
-        .to_string_lossy()
-        .trim_start_matches(r"\\?\")
-        .to_string();
+    let path = std::fs::canonicalize(
+        super::profile::extension_source()
+            .ok_or("extensão do Idlerx não assinada e sem a pasta do código")?,
+    )
+    .map_err(|e| e.to_string())?
+    .to_string_lossy()
+    .trim_start_matches(r"\\?\")
+    .to_string();
     write(
         &mut s,
         serde_json::json!({ "to": addons, "type": "installTemporaryAddon", "addonPath": path }),

@@ -1410,7 +1410,7 @@ dependencies = [
 
 [[package]]
 name = "idlerx"
-version = "0.10.4"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "base32",

@@ -235,7 +235,7 @@ pub fn init(waker: Waker) -> Result<(), String> {
         waiting: Vec::new(),
         parent: 0,
         keep: Vec::new(),
-        scheme: "system",
+        scheme: "auto",
         save_passwords: true,
         next_req: 1,
         captures: HashMap::new(),

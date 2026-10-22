@@ -197,7 +197,7 @@ impl Panel {
     /// Follows the app's theme: the pages' preferred color scheme.
     pub fn set_theme(&self, theme: Theme, _dark: bool) {
         let scheme = match theme {
-            Theme::System => "system",
+            Theme::System => "auto",
             Theme::Dark => "dark",
             Theme::Light => "light",
         };

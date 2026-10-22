@@ -2,7 +2,11 @@
 # machine paths and checks the result. Used by the release workflow and for
 # local builds.
 [CmdletBinding()]
-param()
+param(
+    # builds without Idlerx's signed Firefox extension (only to test the
+    # build: such an executable cannot install its extension)
+    [switch]$AllowUnsigned
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -57,6 +61,25 @@ if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notm
 }
 Write-Host "OpenVPN installer verified (SHA-256 and OpenVPN Inc. signature)."
 
+# Idlerx's Firefox extension, signed by Mozilla (made by the release
+# workflow, see release.yml). Firefox only installs signed extensions.
+$xpiPath = Join-Path $crateRoot "assets\idlerx-firefox.xpi"
+if (Test-Path $xpiPath) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [IO.Compression.ZipFile]::OpenRead($xpiPath)
+    try {
+        $signed = @($zip.Entries | Where-Object { $_.FullName -match '^META-INF/(mozilla\.rsa|cose\.sig)$' }).Count -gt 0
+    } finally {
+        $zip.Dispose()
+    }
+    if (-not $signed) { throw "assets\idlerx-firefox.xpi is not signed by Mozilla." }
+    Write-Host "Firefox extension: signed."
+} elseif (-not $AllowUnsigned) {
+    throw "Missing assets\idlerx-firefox.xpi (Idlerx's Firefox extension signed by Mozilla)."
+} else {
+    Write-Warning "Building without the signed Firefox extension (test build)."
+}
+
 Push-Location $crateRoot
 try {
     cargo test --locked
@@ -99,8 +122,8 @@ try {
         }
     }
 
-    # a single file: no Visual C++ runtime or WebView2Loader.dll next to it
-    foreach ($dll in @("VCRUNTIME140.dll", "WebView2Loader.dll", "MSVCP140.dll")) {
+    # a single file: no Visual C++ runtime next to it
+    foreach ($dll in @("VCRUNTIME140.dll", "MSVCP140.dll")) {
         if ($singleByteText.IndexOf($dll, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
             throw "The executable depends on $dll (it must be linked statically)."
         }

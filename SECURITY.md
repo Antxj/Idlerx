@@ -25,10 +25,16 @@ Of particular interest:
 - the browser profiles in `%LOCALAPPDATA%\Idlerx\profiles` and the settings
   in `%APPDATA%\Idlerx\config.json`;
 - the update mechanism (download, SHA-256 and signature checks, executable
-  replacement).
+  replacement);
+- the link between Idlerx and its Firefox (the extension in
+  `firefox/extension`, native messaging and the local socket with a one-time
+  key);
+- the saved passwords of the accounts (`%APPDATA%\Idlerx\passwords.dat`,
+  encrypted by Windows).
 
-Vulnerabilities in WebView2 / Microsoft Edge itself should be reported to
-Microsoft (https://msrc.microsoft.com).
+Vulnerabilities in Firefox itself should be reported to Mozilla
+(https://www.mozilla.org/security/), and in uBlock Origin to its project
+(https://github.com/gorhill/uBlock).
 
 ---
 
