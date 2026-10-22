@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 static XPI: &[u8] = include_bytes!(env!("IDLERX_FIREFOX_XPI"));
 pub const EXTENSION_ID: &str = "idlerx@antxj.github.io";
 /// Folder of the extension's source (development builds: the executable is
-/// in rust	arget\<profile>, the source in firefox\extension).
+/// in rust/target/<profile>, the source in firefox/extension).
 pub fn extension_source() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let repo = exe.parent()?.parent()?.parent()?.parent()?;
