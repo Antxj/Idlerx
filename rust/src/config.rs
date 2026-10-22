@@ -147,6 +147,9 @@ pub struct Group {
     pub vpn: Option<GroupVpn>,
     /// Every account of the group is InPrivate (see `Account::in_private`).
     pub in_private: bool,
+    /// Color that marks the group and its accounts (index of the palette,
+    /// see `app::widgets::group_color`); None = no color.
+    pub color: Option<u8>,
 }
 
 impl Group {

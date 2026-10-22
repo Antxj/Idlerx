@@ -273,10 +273,19 @@ impl App {
                 actions.push(Action::MoveTo(p.0.clone(), id.clone()));
             }
 
+            let color = self
+                .cfg
+                .group_of(&a)
+                .and_then(|g| self.cfg.group(g))
+                .and_then(|g| g.color)
+                .map(group_color);
             let stroke = if hovering {
                 Stroke::new(2.0, ACCENT)
             } else if selected && ids.len() > 1 {
                 Stroke::new(1.5, ACCENT)
+            } else if let Some(c) = color {
+                // the group's color marks its accounts in the grid
+                Stroke::new(1.5, c.gamma_multiply(0.8))
             } else {
                 Stroke::new(1.0, border(dark))
             };

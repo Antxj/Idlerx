@@ -247,6 +247,17 @@ impl App {
         }
 
         let painter = ui.painter_at(rect);
+        // the color of the account's group, a stripe on the left
+        if let Some(c) = self.cfg.group_of(a).and_then(|g| self.cfg.group(g)).and_then(|g| g.color) {
+            ui.painter().rect_filled(
+                Rect::from_min_size(
+                    Pos2::new(full.left(), full.top() + 8.0),
+                    Vec2::new(3.0, full.height() - 16.0),
+                ),
+                CornerRadius::same(2),
+                group_color(c),
+            );
+        }
         let bg = if selected {
             ACCENT.gamma_multiply(if dark { 0.22 } else { 0.16 })
         } else if resp.hovered() {
@@ -622,6 +633,14 @@ impl App {
             );
         }
 
+        // the group's color, a stripe on the left
+        if let Some(c) = g.color {
+            painter.rect_filled(
+                Rect::from_min_size(rect.min + Vec2::new(0.0, 6.0), Vec2::new(3.0, rect.height() - 12.0)),
+                CornerRadius::same(2),
+                group_color(c),
+            );
+        }
         // expand/collapse triangle
         let c = Pos2::new(rect.left() + 12.0, rect.top() + GROUP_HEIGHT / 2.0);
         let tri = if g.collapsed {

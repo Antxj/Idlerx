@@ -157,6 +157,7 @@ struct GroupEdit {
     assign: Option<String>,
     vpn: network::VpnEdit,
     in_private: bool,
+    color: Option<u8>,
     error: Option<String>,
 }
 
@@ -349,6 +350,7 @@ impl App {
                     assign: None,
                     vpn: network::VpnEdit::of(Some(g)),
                     in_private: g.in_private,
+                    color: g.color,
                     error: None,
                 })
             }),
@@ -702,6 +704,7 @@ impl App {
                     assign,
                     vpn: network::VpnEdit::default(),
                     in_private: false,
+                    color: None,
                     error: None,
                 }))
             }
@@ -713,6 +716,7 @@ impl App {
                         assign: None,
                         vpn: network::VpnEdit::of(Some(g)),
                         in_private: g.in_private,
+                        color: g.color,
                         error: None,
                     }));
                 }
