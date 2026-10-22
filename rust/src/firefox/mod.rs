@@ -103,6 +103,9 @@ pub struct OpenSpec {
     pub muted: bool,
     pub net: String,
     pub options: profile::Options,
+    /// Cookies brought from the previous engine, set in the account's
+    /// container before its page opens.
+    pub cookies: Vec<Value>,
 }
 
 enum Incoming {
@@ -371,6 +374,12 @@ impl Engine {
         self.pages.insert(spec.id.clone(), page.clone());
         if let Some(n) = self.nets.get_mut(&spec.net) {
             n.idle_since = None;
+        }
+        if !spec.cookies.is_empty() {
+            self.send(
+                &spec.net,
+                json!({ "cmd": "cookies", "container": spec.profile, "list": spec.cookies }),
+            );
         }
         self.send(
             &spec.net,
@@ -778,7 +787,7 @@ impl Engine {
                     }
                 }
             }
-            "error" => log(net, msg["what"].as_str().unwrap_or_default()),
+            "error" | "log" => log(net, msg["what"].as_str().unwrap_or_default()),
             _ => {}
         }
         None

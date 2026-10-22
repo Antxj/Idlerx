@@ -267,6 +267,24 @@ impl App {
         update::start_periodic_check(check_updates_enabled);
 
         config::delete_pending(&mut cfg);
+        // first start with Firefox: the accounts' saved passwords come from
+        // WebView2 now, their logins (cookies) when each one opens
+        if cfg.webview2_pending.is_none() {
+            let pending: Vec<String> = if crate::migrate::old_dirs().is_empty() {
+                Vec::new()
+            } else {
+                cfg.accounts.iter().map(|a| a.profile.clone()).collect()
+            };
+            for p in &pending {
+                if let Some(m) = crate::migrate::read(p) {
+                    let n = crate::passwords::import(p, m.logins);
+                    if n > 0 {
+                        events::log("Idlerx", &format!("{n} senha(s) trazidas do Edge ({p})"));
+                    }
+                }
+            }
+            cfg.webview2_pending = Some(pending);
+        }
         let mut queue = VecDeque::new();
         for a in &mut cfg.accounts {
             if a.open && cfg.restore_open {
@@ -510,7 +528,9 @@ impl App {
                     in_private: self.cfg.in_private(&acc),
                     fps: self.fps,
                 };
-                let slot = panels::open(self.hwnd, &acc, browser, wake);
+                // logins from the previous engine, once
+                let cookies = self.moved_cookies(&acc.profile);
+                let slot = panels::open(self.hwnd, &acc, browser, cookies, wake);
                 self.starting = Some((id, slot));
             }
             _ => {
@@ -518,6 +538,39 @@ impl App {
                 ctx.request_repaint();
             }
         }
+    }
+
+    /// The account's cookies from WebView2, the first time it opens with
+    /// Firefox. When every account has moved, the old folders go.
+    fn moved_cookies(&mut self, profile: &str) -> Vec<serde_json::Value> {
+        let profiles: Vec<String> = self.cfg.accounts.iter().map(|a| a.profile.clone()).collect();
+        let Some(pending) = self.cfg.webview2_pending.as_mut() else {
+            return Vec::new();
+        };
+        let had = pending.iter().any(|p| p == profile);
+        pending.retain(|p| p != profile && profiles.contains(p));
+        let done = pending.is_empty();
+        self.mark_dirty();
+        let cookies = if had {
+            crate::migrate::read(profile).map(|m| m.cookies).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        if had {
+            let name = self
+                .cfg
+                .accounts
+                .iter()
+                .find(|a| a.profile == profile)
+                .map(|a| a.name.clone())
+                .unwrap_or_default();
+            events::log(&name, &format!("{} cookie(s) trazidos do Edge", cookies.len()));
+        }
+        if done && !crate::migrate::old_dirs().is_empty() {
+            events::log("Idlerx", "todas as contas migradas: apagando as pastas do Edge");
+            crate::migrate::delete_old();
+        }
+        cookies
     }
 
     fn apply(&mut self, action: Action) {

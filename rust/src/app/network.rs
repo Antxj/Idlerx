@@ -90,10 +90,7 @@ impl App {
         if !self.is_open_or_opening(id) {
             return;
         }
-        self.note(
-            id,
-            "reabrindo: a rede ou o modo da conta mudou (VPN, InPrivate ou outro grupo)",
-        );
+        self.note(id, "reabrindo a conta");
         self.close_panel(id);
         self.request_open(id);
         // the old browser takes a moment to let its folder go

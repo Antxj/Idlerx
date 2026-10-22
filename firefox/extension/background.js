@@ -78,6 +78,16 @@ async function command(m) {
       send({ ev: 'opened', id: m.id, marker: marker(m.id).trim() });
       break;
     }
+    case 'cookies': {
+      // logins brought from the previous engine, into the account's container
+      const storeId = await container(m.container, false);
+      let ok = 0;
+      for (const c of m.list || []) {
+        try { await browser.cookies.set(Object.assign({}, c, { storeId })); ok++; } catch (e) {}
+      }
+      send({ ev: 'log', what: 'cookies trazidos: ' + ok + '/' + (m.list || []).length });
+      break;
+    }
     case 'close':
       if (a) await closeAccount(m.id, a);
       break;

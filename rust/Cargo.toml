@@ -27,6 +27,10 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_Wind
 tray-icon = "0.26"
 image = { version = "0.25", default-features = false, features = ["png"] }
 base64 = "0.22"
+# moving the logins and saved passwords of the previous engine (WebView2)
+rusqlite = { version = "0.37", features = ["bundled"] }
+aes-gcm = "0.10"
+sha2 = "0.10"
 
 [build-dependencies]
 embed-resource = "3"
