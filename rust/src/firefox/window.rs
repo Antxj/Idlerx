@@ -57,10 +57,6 @@ impl Window {
         self.0 as HWND
     }
 
-    pub fn exists(self) -> bool {
-        unsafe { wm::IsWindow(self.h()) != 0 }
-    }
-
     /// Process of the window (Firefox's main process).
     pub fn pid(self) -> u32 {
         let mut pid = 0u32;
@@ -147,9 +143,19 @@ impl Window {
         let y = (fy.clamp(0.0, 1.0) * (h - 1) as f32).round() as i32;
         let pos = ((y as u32 & 0xFFFF) << 16 | (x as u32 & 0xFFFF)) as isize;
         let (down, up, dbl, mk) = if right {
-            (wm::WM_RBUTTONDOWN, wm::WM_RBUTTONUP, wm::WM_RBUTTONDBLCLK, 0x0002)
+            (
+                wm::WM_RBUTTONDOWN,
+                wm::WM_RBUTTONUP,
+                wm::WM_RBUTTONDBLCLK,
+                0x0002,
+            )
         } else {
-            (wm::WM_LBUTTONDOWN, wm::WM_LBUTTONUP, wm::WM_LBUTTONDBLCLK, 0x0001)
+            (
+                wm::WM_LBUTTONDOWN,
+                wm::WM_LBUTTONUP,
+                wm::WM_LBUTTONDBLCLK,
+                0x0001,
+            )
         };
         self.post(wm::WM_MOUSEMOVE, 0, pos);
         self.post(down, mk, pos);

@@ -45,8 +45,12 @@ fn with<R>(f: impl FnOnce(&mut Store) -> R) -> R {
 }
 
 fn save(store: &Store) {
-    let Ok(json) = serde_json::to_vec(store) else { return };
-    let Some(data) = crate::vpn::secrets::dpapi(&json, true) else { return };
+    let Ok(json) = serde_json::to_vec(store) else {
+        return;
+    };
+    let Some(data) = crate::vpn::secrets::dpapi(&json, true) else {
+        return;
+    };
     let p = path();
     if let Some(dir) = p.parent() {
         let _ = std::fs::create_dir_all(dir);
@@ -79,7 +83,11 @@ pub fn is_saved(profile: &str, offer: &crate::firefox::LoginOffer) -> bool {
 }
 
 pub fn never(profile: &str, origin: &str) -> bool {
-    with(|s| s.never.get(profile).is_some_and(|n| n.iter().any(|o| o == origin)))
+    with(|s| {
+        s.never
+            .get(profile)
+            .is_some_and(|n| n.iter().any(|o| o == origin))
+    })
 }
 
 /// Saves a login (replacing the same user name on the same site).
@@ -128,7 +136,10 @@ pub fn import(profile: &str, logins: Vec<Login>) -> usize {
         let list = s.logins.entry(profile.to_string()).or_default();
         let mut added = 0;
         for l in logins {
-            if !list.iter().any(|x| x.origin == l.origin && x.username == l.username) {
+            if !list
+                .iter()
+                .any(|x| x.origin == l.origin && x.username == l.username)
+            {
                 list.push(l);
                 added += 1;
             }

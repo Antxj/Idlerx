@@ -132,6 +132,9 @@ enum Action {
     InstallFirefox,
 }
 
+/// Firefox's installation: None while it runs, then the result.
+type Installing = Arc<Mutex<Option<Result<(), String>>>>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LoginChoice {
     Save,
@@ -200,7 +203,7 @@ pub struct App {
     /// Logins just made in an account: Idlerx offers to save them.
     login_offers: Vec<crate::firefox::LoginOffer>,
     /// Firefox being installed: None while it runs, then the result.
-    firefox_install: Option<Arc<Mutex<Option<Result<(), String>>>>>,
+    firefox_install: Option<Installing>,
     /// "Restart now" was clicked.
     restart: bool,
     /// The window was shown (maximized when it was closed maximized).
@@ -241,10 +244,8 @@ pub struct App {
     vpn_down: HashMap<String, (Instant, bool)>,
     /// A new version was told through a notification.
     update_told: bool,
-    /// Pages reloaded by themselves after a crash (recent times, per
-    /// account), and since when a page is not responding.
+    /// Accounts opened again by themselves after a failure (recent times).
     recoveries: HashMap<String, Vec<Instant>>,
-    unresponsive: HashMap<String, Instant>,
     /// IDLERX_SCREENSHOT=pointer:x,y,right: the right click was sent.
     pointer_clicked: bool,
     /// Macros being played, per account.
@@ -399,7 +400,6 @@ impl App {
             vpn_down: HashMap::new(),
             update_told: false,
             recoveries: HashMap::new(),
-            unresponsive: HashMap::new(),
             pointer_clicked: false,
             macro_runs: HashMap::new(),
             macro_shot: None,
@@ -551,7 +551,12 @@ impl App {
     /// The account's logins (cookies) and sites' saves (localStorage) from
     /// WebView2, the first time it opens with Firefox.
     fn moved_data(&mut self, profile: &str) -> crate::migrate::Moved {
-        let profiles: Vec<String> = self.cfg.accounts.iter().map(|a| a.profile.clone()).collect();
+        let profiles: Vec<String> = self
+            .cfg
+            .accounts
+            .iter()
+            .map(|a| a.profile.clone())
+            .collect();
         let Some(pending) = self.cfg.webview2_pending.as_mut() else {
             return Default::default();
         };
@@ -933,7 +938,12 @@ impl App {
         let mut pids = HashMap::new();
         pids.insert(metrics::TOTAL.to_string(), vec![std::process::id()]);
         // containers of deleted accounts (or of cleared data) go away
-        let keep: Vec<String> = self.cfg.accounts.iter().map(|a| a.profile.clone()).collect();
+        let keep: Vec<String> = self
+            .cfg
+            .accounts
+            .iter()
+            .map(|a| a.profile.clone())
+            .collect();
         crate::firefox::with(|e| e.set_keep(keep));
         self.audio.clear();
         for (id, p) in &self.panels {
@@ -964,27 +974,14 @@ impl App {
         }
     }
 
-    /// A page crashed or got stuck: it is reloaded (or the account opened
-    /// again when its browser is gone), so a hidden account does not stay
-    /// dead for hours. At most 3 times in 10 minutes per account, so a page
-    /// that keeps crashing is left alone.
+    /// The account's Firefox (or its window) went away: the account opens
+    /// again, so a hidden account does not stay dead for hours. At most 3
+    /// times in 10 minutes per account, so one that keeps failing is left
+    /// alone.
     fn recover(&mut self, id: &str, failure: Failure) {
         const WINDOW: Duration = Duration::from_secs(10 * 60);
-        // stuck: only when it is still stuck half a minute later
-        if failure == Failure::Unresponsive {
-            let since = *self
-                .unresponsive
-                .entry(id.to_string())
-                .or_insert_with(Instant::now);
-            if since.elapsed() < Duration::from_secs(30) {
-                return;
-            }
-        }
-        self.unresponsive.remove(id);
         let what = match failure {
             Failure::BrowserGone => "o navegador da conta fechou",
-            Failure::PageCrashed => "o processo da página caiu",
-            Failure::Unresponsive => "a página ficou 30 s sem responder",
         };
         let times = self.recoveries.entry(id.to_string()).or_default();
         times.retain(|t| t.elapsed() < WINDOW);
@@ -996,18 +993,8 @@ impl App {
             return;
         }
         times.push(Instant::now());
-        match failure {
-            Failure::BrowserGone => {
-                self.note(id, &format!("{what}: reabrindo a conta"));
-                self.restart_account(id);
-            }
-            Failure::PageCrashed | Failure::Unresponsive => {
-                if let Some(p) = self.panels.get(id) {
-                    p.reload();
-                }
-                self.note(id, &format!("{what}: recarregada"));
-            }
-        }
+        self.note(id, &format!("{what}: reabrindo a conta"));
+        self.restart_account(id);
     }
 
     /// Ctrl+1…9: shows the account at that place of the list (opening it
@@ -1020,7 +1007,10 @@ impl App {
             self.request_open(&id);
         }
         let in_grid = self.cfg.layout == Layout::Grid
-            && self.cfg.grid_accounts(|i| self.is_open_or_opening(i)).contains(&id);
+            && self
+                .cfg
+                .grid_accounts(|i| self.is_open_or_opening(i))
+                .contains(&id);
         if !in_grid {
             self.cfg.layout = Layout::Tabs;
         }
@@ -1046,13 +1036,22 @@ impl App {
         }
         let digit = ctx.input(|i| {
             const KEYS: [Key; 9] = [
-                Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5,
-                Key::Num6, Key::Num7, Key::Num8, Key::Num9,
+                Key::Num1,
+                Key::Num2,
+                Key::Num3,
+                Key::Num4,
+                Key::Num5,
+                Key::Num6,
+                Key::Num7,
+                Key::Num8,
+                Key::Num9,
             ];
             if !i.modifiers.command || i.modifiers.shift || i.modifiers.alt {
                 return None;
             }
-            KEYS.iter().position(|k| i.key_pressed(*k)).map(|p| p as u8 + 1)
+            KEYS.iter()
+                .position(|k| i.key_pressed(*k))
+                .map(|p| p as u8 + 1)
         });
         if let (Some(n), None) = (digit, &self.dialog) {
             self.show_nth(n);
@@ -1326,8 +1325,13 @@ impl eframe::App for App {
         }
         // IDLERX_SCREENSHOT=blocker-panel (tests): uBlock Origin's panel of
         // the first account, once
-        if self.screenshot.as_deref() == Some("blocker-panel") && self.macro_started_once.is_empty() {
-            if let Some((id, p)) = self.panels.iter().find(|(_, p)| p.started.elapsed() > Duration::from_secs(4)) {
+        if self.screenshot.as_deref() == Some("blocker-panel") && self.macro_started_once.is_empty()
+        {
+            if let Some((id, p)) = self
+                .panels
+                .iter()
+                .find(|(_, p)| p.started.elapsed() > Duration::from_secs(4))
+            {
                 self.macro_started_once.insert(id.clone());
                 p.open_blocker_panel(200, 200);
             }
@@ -1354,7 +1358,11 @@ impl eframe::App for App {
         }
         // IDLERX_SCREENSHOT=login-save (tests): every login offered is saved
         if self.screenshot.as_deref() == Some("login-save") {
-            let ids: Vec<String> = self.login_offers.iter().map(|o| o.account.clone()).collect();
+            let ids: Vec<String> = self
+                .login_offers
+                .iter()
+                .map(|o| o.account.clone())
+                .collect();
             for id in ids {
                 self.apply(Action::LoginChoice(id, LoginChoice::Save));
             }

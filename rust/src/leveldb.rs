@@ -49,7 +49,9 @@ pub fn read_dir(dir: &Path) -> Entries {
     };
     for f in files.flatten() {
         let name = f.file_name().to_string_lossy().to_string();
-        let Ok(data) = std::fs::read(f.path()) else { continue };
+        let Ok(data) = std::fs::read(f.path()) else {
+            continue;
+        };
         if name.ends_with(".log") {
             read_log(&data, &mut seen);
         } else if name.ends_with(".ldb") || name.ends_with(".sst") {
@@ -76,7 +78,9 @@ fn read_log(data: &[u8], seen: &mut Seen) {
         let len = u16::from_le_bytes([data[pos + 4], data[pos + 5]]) as usize;
         let kind = data[pos + 6];
         let start = pos + 7;
-        let Some(piece) = data.get(start..start + len) else { break };
+        let Some(piece) = data.get(start..start + len) else {
+            break;
+        };
         pos = start + len;
         match kind {
             1 => batch(piece, seen),
@@ -102,12 +106,20 @@ fn batch(data: &[u8], seen: &mut Seen) {
     for i in 0..count as u64 {
         let Some(&tag) = data.get(pos) else { return };
         pos += 1;
-        let Some(klen) = varint(data, &mut pos) else { return };
-        let Some(key) = bytes(data, &mut pos, klen as usize) else { return };
+        let Some(klen) = varint(data, &mut pos) else {
+            return;
+        };
+        let Some(key) = bytes(data, &mut pos, klen as usize) else {
+            return;
+        };
         let key = key.to_vec();
         if tag == 1 {
-            let Some(vlen) = varint(data, &mut pos) else { return };
-            let Some(value) = bytes(data, &mut pos, vlen as usize) else { return };
+            let Some(vlen) = varint(data, &mut pos) else {
+                return;
+            };
+            let Some(value) = bytes(data, &mut pos, vlen as usize) else {
+                return;
+            };
             put(seen, key, seq + i, Some(value.to_vec()));
         } else {
             put(seen, key, seq + i, None);
@@ -129,13 +141,17 @@ fn read_table(data: &[u8], seen: &mut Seen) {
     let (Some(off), Some(size)) = (varint(footer, &mut pos), varint(footer, &mut pos)) else {
         return;
     };
-    let Some(index) = block(data, off as usize, size as usize) else { return };
+    let Some(index) = block(data, off as usize, size as usize) else {
+        return;
+    };
     for (_, handle) in entries(&index) {
         let mut p = 0;
         let (Some(off), Some(size)) = (varint(&handle, &mut p), varint(&handle, &mut p)) else {
             continue;
         };
-        let Some(b) = block(data, off as usize, size as usize) else { continue };
+        let Some(b) = block(data, off as usize, size as usize) else {
+            continue;
+        };
         for (ikey, value) in entries(&b) {
             // internal key: the key, then 8 bytes of sequence << 8 | kind
             if ikey.len() < 8 {
@@ -180,10 +196,14 @@ fn entries(b: &[u8]) -> Vec<(Vec<u8>, Vec<u8>)> {
         ) else {
             break;
         };
-        let Some(rest) = bytes(data, &mut pos, unshared as usize) else { break };
+        let Some(rest) = bytes(data, &mut pos, unshared as usize) else {
+            break;
+        };
         key.truncate(shared as usize);
         key.extend_from_slice(rest);
-        let Some(value) = bytes(data, &mut pos, vlen as usize) else { break };
+        let Some(value) = bytes(data, &mut pos, vlen as usize) else {
+            break;
+        };
         out.push((key.clone(), value.to_vec()));
     }
     out
@@ -198,8 +218,10 @@ pub fn local_storage(entries: &Entries) -> HashMap<String, Vec<(String, String)>
         match kind {
             0 => {
                 let units: Vec<u16> = rest
-                    .chunks_exact(2)
-                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| u16::from_le_bytes(*c))
                     .collect();
                 String::from_utf16(&units).ok()
             }
@@ -209,8 +231,12 @@ pub fn local_storage(entries: &Entries) -> HashMap<String, Vec<(String, String)>
     };
     let mut out: HashMap<String, Vec<(String, String)>> = HashMap::new();
     for (k, v) in entries {
-        let Some(rest) = k.strip_prefix(b"_") else { continue };
-        let Some(zero) = rest.iter().position(|&c| c == 0) else { continue };
+        let Some(rest) = k.strip_prefix(b"_") else {
+            continue;
+        };
+        let Some(zero) = rest.iter().position(|&c| c == 0) else {
+            continue;
+        };
         let origin = String::from_utf8_lossy(&rest[..zero]).to_string();
         let (Some(key), Some(value)) = (text(&rest[zero + 1..]), text(v)) else {
             continue;
@@ -262,15 +288,24 @@ mod tests {
 
     #[test]
     fn log_batches_newest_wins() {
-        let mut log = record(1, &batch_bytes(1, &[(b"a", Some(b"1")), (b"b", Some(b"x"))]));
-        log.extend(record(1, &batch_bytes(3, &[(b"a", Some(b"2")), (b"b", None)])));
+        let mut log = record(
+            1,
+            &batch_bytes(1, &[(b"a", Some(b"1")), (b"b", Some(b"x"))]),
+        );
+        log.extend(record(
+            1,
+            &batch_bytes(3, &[(b"a", Some(b"2")), (b"b", None)]),
+        ));
         let mut seen = Seen::new();
         read_log(&log, &mut seen);
         let e: Entries = seen
             .into_iter()
             .filter_map(|(k, (_, v))| v.map(|v| (k, v)))
             .collect();
-        assert_eq!(e.get(b"a".as_slice()).map(|v| v.as_slice()), Some(b"2".as_slice()));
+        assert_eq!(
+            e.get(b"a".as_slice()).map(|v| v.as_slice()),
+            Some(b"2".as_slice())
+        );
         assert!(!e.contains_key(b"b".as_slice()));
     }
 
@@ -303,10 +338,13 @@ mod tests {
         let ls = local_storage(&e);
         let mut items = ls["https://game.example"].clone();
         items.sort();
-        assert_eq!(items, vec![
-            ("save".to_string(), "{\"gold\":1}".to_string()),
-            ("é".to_string(), "ação🎮".to_string()),
-        ]);
+        assert_eq!(
+            items,
+            vec![
+                ("save".to_string(), "{\"gold\":1}".to_string()),
+                ("é".to_string(), "ação🎮".to_string()),
+            ]
+        );
         assert_eq!(ls.len(), 1);
     }
 }

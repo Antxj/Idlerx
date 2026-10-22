@@ -129,14 +129,19 @@ impl App {
                     // the app's process tree includes every account's browser
                     let total = self.metrics.get(metrics::TOTAL).unwrap_or_default();
                     // each network's Firefox (its accounts share its processes)
-                    let mut nets: Vec<String> =
-                        self.panels.values().map(|p| p.network().to_string()).collect();
+                    let mut nets: Vec<String> = self
+                        .panels
+                        .values()
+                        .map(|p| p.network().to_string())
+                        .collect();
                     nets.sort();
                     nets.dedup();
                     let (mut cpu, mut mem) = (0.0f32, 0u64);
                     let mut lines = String::new();
                     for net in &nets {
-                        let Some(u) = self.metrics.get(&net_key(net)) else { continue };
+                        let Some(u) = self.metrics.get(&net_key(net)) else {
+                            continue;
+                        };
                         cpu += u.cpu;
                         mem += u.memory;
                         let n = self.panels.values().filter(|p| p.network() == net).count();
@@ -248,7 +253,12 @@ impl App {
 
         let painter = ui.painter_at(rect);
         // the color of the account's group, a stripe on the left
-        if let Some(c) = self.cfg.group_of(a).and_then(|g| self.cfg.group(g)).and_then(|g| g.color) {
+        if let Some(c) = self
+            .cfg
+            .group_of(a)
+            .and_then(|g| self.cfg.group(g))
+            .and_then(|g| g.color)
+        {
             ui.painter().rect_filled(
                 Rect::from_min_size(
                     Pos2::new(full.left(), full.top() + 8.0),
@@ -636,7 +646,10 @@ impl App {
         // the group's color, a stripe on the left
         if let Some(c) = g.color {
             painter.rect_filled(
-                Rect::from_min_size(rect.min + Vec2::new(0.0, 6.0), Vec2::new(3.0, rect.height() - 12.0)),
+                Rect::from_min_size(
+                    rect.min + Vec2::new(0.0, 6.0),
+                    Vec2::new(3.0, rect.height() - 12.0),
+                ),
                 CornerRadius::same(2),
                 group_color(c),
             );
@@ -743,7 +756,10 @@ impl App {
         // a group with a VPN has a Firefox of its own: its usage
         let usage = g
             .active_vpn()
-            .and_then(|_| self.metrics.get(&net_key(&crate::panels::network(Some(&g.id)))))
+            .and_then(|_| {
+                self.metrics
+                    .get(&net_key(&crate::panels::network(Some(&g.id))))
+            })
             .map(|u| {
                 trf!(
                     "\nFirefox do grupo: CPU {:.0}% · RAM {}",

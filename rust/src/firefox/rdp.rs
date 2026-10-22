@@ -44,7 +44,11 @@ pub fn install_extension(port: u16) -> Result<(), String> {
     let _ = s.set_read_timeout(Some(Duration::from_secs(20)));
     let mut buf = Vec::new();
     read(&mut s, &mut buf).ok_or("sem resposta do depurador")?;
-    write(&mut s, serde_json::json!({ "to": "root", "type": "getRoot" })).ok_or("depurador")?;
+    write(
+        &mut s,
+        serde_json::json!({ "to": "root", "type": "getRoot" }),
+    )
+    .ok_or("depurador")?;
     let addons = loop {
         let v = read(&mut s, &mut buf).ok_or("sem resposta do depurador")?;
         if let Some(a) = v["addonsActor"].as_str() {

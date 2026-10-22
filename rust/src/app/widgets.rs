@@ -113,11 +113,6 @@ pub(super) fn leaf(ui: &mut egui::Ui) -> egui::Response {
     resp
 }
 
-/// "CPU 3% · RAM 245 MB"
-pub(super) fn usage_text(u: metrics::Usage) -> String {
-    format!("CPU {:.0}% · RAM {}", u.cpu, metrics::fmt_memory(u.memory))
-}
-
 /// Name of a grid shape: "Auto", "3 col." or "2×2".
 pub(super) fn shape_label(cols: u8, rows: u8) -> String {
     match (cols, rows) {
@@ -353,6 +348,22 @@ pub(super) fn centered(ui: &mut egui::Ui, rect: Rect, add: impl FnOnce(&mut egui
     add(&mut child);
 }
 
+/// Colors a group can have (marks it and its accounts).
+pub(super) const GROUP_COLORS: [Color32; 8] = [
+    Color32::from_rgb(0x14, 0xb8, 0xa6),
+    Color32::from_rgb(0x3b, 0x82, 0xf6),
+    Color32::from_rgb(0x8b, 0x5c, 0xf6),
+    Color32::from_rgb(0xec, 0x48, 0x99),
+    Color32::from_rgb(0xef, 0x44, 0x44),
+    Color32::from_rgb(0xf5, 0x9e, 0x0b),
+    Color32::from_rgb(0x84, 0xcc, 0x16),
+    Color32::from_rgb(0x94, 0xa3, 0xb8),
+];
+
+pub(super) fn group_color(i: u8) -> Color32 {
+    GROUP_COLORS[i as usize % GROUP_COLORS.len()]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,20 +384,4 @@ mod tests {
     fn stable_avatar_color() {
         assert_eq!(avatar_color("abc"), avatar_color("abc"));
     }
-}
-
-/// Colors a group can have (marks it and its accounts).
-pub(super) const GROUP_COLORS: [Color32; 8] = [
-    Color32::from_rgb(0x14, 0xb8, 0xa6),
-    Color32::from_rgb(0x3b, 0x82, 0xf6),
-    Color32::from_rgb(0x8b, 0x5c, 0xf6),
-    Color32::from_rgb(0xec, 0x48, 0x99),
-    Color32::from_rgb(0xef, 0x44, 0x44),
-    Color32::from_rgb(0xf5, 0x9e, 0x0b),
-    Color32::from_rgb(0x84, 0xcc, 0x16),
-    Color32::from_rgb(0x94, 0xa3, 0xb8),
-];
-
-pub(super) fn group_color(i: u8) -> Color32 {
-    GROUP_COLORS[i as usize % GROUP_COLORS.len()]
 }

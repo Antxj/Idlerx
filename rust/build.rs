@@ -22,7 +22,11 @@ fn main() {
     println!("cargo:rerun-if-changed=assets/openvpn.msi");
     println!("cargo:rerun-if-changed=assets/idlerx-firefox.xpi");
     embed_openvpn_msi();
-    embed_optional("assets/idlerx-firefox.xpi", "idlerx-firefox.xpi", "IDLERX_FIREFOX_XPI");
+    embed_optional(
+        "assets/idlerx-firefox.xpi",
+        "idlerx-firefox.xpi",
+        "IDLERX_FIREFOX_XPI",
+    );
 
     if std::env::var_os("CARGO_CFG_WINDOWS").is_none() {
         return;

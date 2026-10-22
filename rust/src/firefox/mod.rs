@@ -55,11 +55,8 @@ pub enum Hotkey {
 /// Something went wrong with a page (see `Page::failure`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Failure {
-    /// The page's process ended: the page is blank.
-    PageCrashed,
-    /// The page stopped responding.
-    Unresponsive,
-    /// The account's Firefox (or its window) is gone.
+    /// The account's Firefox (or its window) is gone. (A page whose
+    /// process crashed shows Firefox's own "restore" page.)
     BrowserGone,
 }
 
@@ -113,10 +110,21 @@ pub struct OpenSpec {
 }
 
 enum Incoming {
-    Connected { net: String },
-    Message { net: String, msg: Value },
-    Disconnected { net: String, conn: u64 },
-    Started { net: String, generation: u64, result: Result<u32, String> },
+    Connected {
+        net: String,
+    },
+    Message {
+        net: String,
+        msg: Value,
+    },
+    Disconnected {
+        net: String,
+    },
+    Started {
+        net: String,
+        generation: u64,
+        result: Result<u32, String>,
+    },
 }
 
 type Writers = Arc<Mutex<HashMap<String, (u64, TcpStream)>>>;
@@ -140,6 +148,8 @@ struct Net {
 }
 
 type Ready = Box<dyn FnOnce(Result<Rc<Page>, String>)>;
+/// Gets a page's picture (PNG) once it is taken.
+type Capture = Box<dyn FnOnce(Option<Vec<u8>>)>;
 
 struct Waiting {
     page: Rc<Page>,
@@ -165,7 +175,7 @@ pub struct Engine {
     scheme: &'static str,
     save_passwords: bool,
     next_req: u64,
-    captures: HashMap<u64, Box<dyn FnOnce(Option<Vec<u8>>)>>,
+    captures: HashMap<u64, Capture>,
     offers: Vec<LoginOffer>,
     generation: u64,
 }
@@ -203,7 +213,13 @@ pub fn init(waker: Waker) -> Result<(), String> {
     let token = crate::config::new_id() + &crate::config::new_id();
     let (tx, rx) = mpsc::channel();
     let writers: Writers = Arc::default();
-    accept_loop(listener, token.clone(), tx.clone(), writers.clone(), waker.clone());
+    accept_loop(
+        listener,
+        token.clone(),
+        tx.clone(),
+        writers.clone(),
+        waker.clone(),
+    );
     let _ = host::register();
     let engine = Engine {
         port,
@@ -230,30 +246,43 @@ pub fn init(waker: Waker) -> Result<(), String> {
     Ok(())
 }
 
-fn accept_loop(listener: TcpListener, token: String, tx: mpsc::Sender<Incoming>, writers: Writers, waker: Waker) {
+fn accept_loop(
+    listener: TcpListener,
+    token: String,
+    tx: mpsc::Sender<Incoming>,
+    writers: Writers,
+    waker: Waker,
+) {
     std::thread::spawn(move || {
-        let mut next_conn = 1u64;
-        for stream in listener.incoming().flatten() {
-            let conn = next_conn;
-            next_conn += 1;
-            let (tx, writers, waker, token) = (tx.clone(), writers.clone(), waker.clone(), token.clone());
+        for (conn, stream) in (1u64..).zip(listener.incoming().flatten()) {
+            let (tx, writers, waker, token) =
+                (tx.clone(), writers.clone(), waker.clone(), token.clone());
             std::thread::spawn(move || {
                 let mut reader = stream;
                 let _ = reader.set_nodelay(true);
                 // the relay's first message: the key and the network
-                let Some(hello) = host::read_frame(&mut reader) else { return };
-                let Ok(hello) = serde_json::from_slice::<Value>(&hello) else { return };
+                let Some(hello) = host::read_frame(&mut reader) else {
+                    return;
+                };
+                let Ok(hello) = serde_json::from_slice::<Value>(&hello) else {
+                    return;
+                };
                 if hello["token"].as_str() != Some(token.as_str()) {
                     return;
                 }
                 let net = hello["net"].as_str().unwrap_or_default().to_string();
-                let Ok(writer) = reader.try_clone() else { return };
+                let Ok(writer) = reader.try_clone() else {
+                    return;
+                };
                 writers.lock().unwrap().insert(net.clone(), (conn, writer));
                 let _ = tx.send(Incoming::Connected { net: net.clone() });
                 waker();
                 while let Some(frame) = host::read_frame(&mut reader) {
                     if let Ok(msg) = serde_json::from_slice::<Value>(&frame) {
-                        let _ = tx.send(Incoming::Message { net: net.clone(), msg });
+                        let _ = tx.send(Incoming::Message {
+                            net: net.clone(),
+                            msg,
+                        });
                         waker();
                     }
                 }
@@ -263,7 +292,7 @@ fn accept_loop(listener: TcpListener, token: String, tx: mpsc::Sender<Incoming>,
                         w.remove(&net);
                     }
                 }
-                let _ = tx.send(Incoming::Disconnected { net, conn });
+                let _ = tx.send(Incoming::Disconnected { net });
                 waker();
             });
         }
@@ -300,11 +329,6 @@ impl Engine {
         self.save_passwords = on;
     }
 
-    /// Firefox's main process of a network (for the CPU and memory).
-    pub fn browser_pid(&self, net: &str) -> Option<u32> {
-        self.nets.get(net).and_then(|n| n.browser.or(n.launcher))
-    }
-
     /// uBlock Origin's dashboard (settings and lists), opened by the main
     /// network's Firefox (started for it when needed).
     pub fn open_blocker_dashboard(&mut self) {
@@ -325,7 +349,9 @@ impl Engine {
 
     /// Sends a command to a network's extension (kept until it connects).
     pub fn send(&mut self, net: &str, msg: Value) {
-        let Some(n) = self.nets.get_mut(net) else { return };
+        let Some(n) = self.nets.get_mut(net) else {
+            return;
+        };
         if !n.connected {
             n.pending.push(msg);
             return;
@@ -348,7 +374,11 @@ impl Engine {
         let differs = |a: &profile::Options, b: &profile::Options| {
             (a.economy, a.fps, a.proxy) != (b.economy, b.fps, b.proxy)
         };
-        if self.nets.get(&spec.net).is_some_and(|n| differs(&n.options, &spec.options)) {
+        if self
+            .nets
+            .get(&spec.net)
+            .is_some_and(|n| differs(&n.options, &spec.options))
+        {
             self.stop_net(&spec.net);
         }
         if !self.nets.contains_key(&spec.net) {
@@ -413,7 +443,9 @@ impl Engine {
     /// The account's page was closed by Idlerx.
     pub fn close(&mut self, id: &str) {
         self.waiting.retain(|w| w.page.id != id);
-        let Some(page) = self.pages.remove(id) else { return };
+        let Some(page) = self.pages.remove(id) else {
+            return;
+        };
         if let Some(w) = page.window.get() {
             w.hide();
         }
@@ -475,7 +507,9 @@ impl Engine {
     }
 
     fn stop_net(&mut self, net: &str) {
-        let Some(n) = self.nets.remove(net) else { return };
+        let Some(n) = self.nets.remove(net) else {
+            return;
+        };
         if let Some(pid) = n.browser {
             for w in window::windows_of(pid, false) {
                 w.close();
@@ -521,11 +555,18 @@ impl Engine {
                         later.push(f);
                     }
                 }
-                Incoming::Disconnected { net, conn: _ } => {
+                Incoming::Disconnected { net } => {
                     let gone = self.nets.get(&net).is_some_and(|n| n.connected);
                     if gone {
                         let closing = self.nets.get(&net).is_some_and(|n| n.closing);
-                        log(&net, if closing { "Firefox fechado (sem contas)" } else { "o Firefox fechou" });
+                        log(
+                            &net,
+                            if closing {
+                                "Firefox fechado (sem contas)"
+                            } else {
+                                "o Firefox fechou"
+                            },
+                        );
                         // whatever is left of that Firefox goes too: a new
                         // one needs its profile
                         if let Some(n) = self.nets.remove(&net) {
@@ -546,7 +587,11 @@ impl Engine {
                     generation,
                     result,
                 } => {
-                    let Some(n) = self.nets.get_mut(&net).filter(|n| n.generation == generation) else {
+                    let Some(n) = self
+                        .nets
+                        .get_mut(&net)
+                        .filter(|n| n.generation == generation)
+                    else {
                         continue;
                     };
                     match result {
@@ -673,9 +718,17 @@ impl Engine {
     }
 
     fn connected(&mut self, net: &str) {
-        let Some(n) = self.nets.get_mut(net) else { return };
+        let Some(n) = self.nets.get_mut(net) else {
+            return;
+        };
         n.connected = true;
-        log(net, &format!("extensão conectada ({:.1} s)", n.started.elapsed().as_secs_f32()));
+        log(
+            net,
+            &format!(
+                "extensão conectada ({:.1} s)",
+                n.started.elapsed().as_secs_f32()
+            ),
+        );
         let mut pending = std::mem::take(&mut n.pending);
         // first of all, the containers that must go (never with an empty
         // list: that would be every account's)
@@ -688,7 +741,9 @@ impl Engine {
     }
 
     fn page(&self, msg: &Value) -> Option<Rc<Page>> {
-        msg["id"].as_str().and_then(|id| self.pages.get(id).cloned())
+        msg["id"]
+            .as_str()
+            .and_then(|id| self.pages.get(id).cloned())
     }
 
     fn event(&mut self, net: &str, msg: Value) -> Option<Later> {
@@ -782,7 +837,10 @@ impl Engine {
                     .into_iter()
                     .map(|l| json!({ "username": l.username, "password": l.password }))
                     .collect();
-                self.send(net, json!({ "cmd": "logins", "req": msg["req"], "list": list }));
+                self.send(
+                    net,
+                    json!({ "cmd": "logins", "req": msg["req"], "list": list }),
+                );
             }
             "login" => {
                 if let (Some(p), true) = (page, self.save_passwords) {
@@ -815,9 +873,7 @@ fn storage_messages(container: &str, origin: &str, items: &[(String, String)]) -
     let mut out = Vec::new();
     let mut batch: Vec<(String, String)> = Vec::new();
     let mut size = 0;
-    let msg = |items: &[(String, String)], append: bool| {
-        json!({ "cmd": "storage", "container": container, "origin": origin, "items": items, "append": append })
-    };
+    let msg = |items: &[(String, String)], append: bool| json!({ "cmd": "storage", "container": container, "origin": origin, "items": items, "append": append });
     for (k, v) in items {
         if v.len() > MAX {
             let mut piece = String::new();
@@ -865,8 +921,13 @@ fn launch(
     // locked: the new one would quit at once
     end_firefox_using(&dir);
     let mut cmd = Command::new(firefox);
-    cmd.args(["--new-instance", "-no-remote", "--wait-for-browser", "-profile"])
-        .arg(&dir);
+    cmd.args([
+        "--new-instance",
+        "-no-remote",
+        "--wait-for-browser",
+        "-profile",
+    ])
+    .arg(&dir);
     if let Some(p) = o.debugger {
         cmd.args(["--start-debugger-server", &p.to_string()]);
     }
@@ -908,7 +969,10 @@ fn end_firefox_using(profile: &std::path::Path) {
     );
     let mut ended = false;
     for (pid, p) in sys.processes() {
-        let is_firefox = p.name().to_string_lossy().eq_ignore_ascii_case("firefox.exe");
+        let is_firefox = p
+            .name()
+            .to_string_lossy()
+            .eq_ignore_ascii_case("firefox.exe");
         let ours = p
             .cmd()
             .iter()
@@ -1054,8 +1118,11 @@ pub fn find_firefox() -> Option<(PathBuf, String)> {
         })
     };
     for root in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
-        let Some(current) = read(root, r"SOFTWARE\Mozilla\Mozilla Firefox", Some("CurrentVersion"))
-        else {
+        let Some(current) = read(
+            root,
+            r"SOFTWARE\Mozilla\Mozilla Firefox",
+            Some("CurrentVersion"),
+        ) else {
             continue;
         };
         let exe = read(
@@ -1066,7 +1133,11 @@ pub fn find_firefox() -> Option<(PathBuf, String)> {
         .map(PathBuf::from)
         .filter(|p| p.exists());
         if let Some(exe) = exe {
-            let version = current.split_whitespace().next().unwrap_or_default().to_string();
+            let version = current
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_string();
             return Some((exe, version));
         }
     }
@@ -1079,7 +1150,11 @@ pub fn runtime_version() -> Result<String, String> {
     let Some((_, version)) = find_firefox() else {
         return Err(tr!("Firefox não está instalado.", "Firefox is not installed.").into());
     };
-    let major: u32 = version.split('.').next().and_then(|m| m.parse().ok()).unwrap_or(MIN_VERSION);
+    let major: u32 = version
+        .split('.')
+        .next()
+        .and_then(|m| m.parse().ok())
+        .unwrap_or(MIN_VERSION);
     if major < MIN_VERSION {
         return Err(trf!(
             "Firefox {version} é antigo demais: o Idlerx precisa do {MIN_VERSION} ou mais novo.",
@@ -1126,17 +1201,15 @@ pub fn install() -> Result<(), String> {
     }
 }
 
-/// Where the profiles live (for the cleanup of deleted accounts).
-pub fn profiles_root() -> PathBuf {
-    profile::root()
-}
-
 #[cfg(test)]
 mod storage_tests {
     #[test]
     fn big_values_go_in_pieces() {
         let big = "é".repeat(300_000); // 600 KB
-        let items = vec![("a".to_string(), "1".to_string()), ("save".to_string(), big.clone())];
+        let items = vec![
+            ("a".to_string(), "1".to_string()),
+            ("save".to_string(), big.clone()),
+        ];
         let msgs = super::storage_messages("p", "https://g", &items);
         assert_eq!(msgs.len(), 3);
         assert_eq!(msgs[0]["append"], false);

@@ -13,7 +13,8 @@ pub const EXTENSION_ID: &str = "idlerx@antxj.github.io";
 pub const EXTENSION_SOURCE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../firefox/extension");
 
 const UBLOCK_ID: &str = "uBlock0@raymondhill.net";
-const UBLOCK_URL: &str = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
+const UBLOCK_URL: &str =
+    "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
 /// Fixed internal addresses of the extensions (Idlerx opens uBlock
 /// Origin's panel by it). Same value as in background.js.
 const UUIDS: &str = r#"{"uBlock0@raymondhill.net":"9c3c1f0e-1d6b-4f0e-9a8e-1d3e5b7a2c40","idlerx@antxj.github.io":"4f1e2d3c-5b6a-4789-8a0b-1c2d3e4f5a6b"}"#;
@@ -57,7 +58,10 @@ pub fn prefs(o: &Options) -> String {
         ("browser.aboutwelcome.enabled", false),
         ("browser.preonboarding.enabled", false),
         ("termsofuse.bypassNotification", true),
-        ("datareporting.policy.dataSubmissionPolicyBypassNotification", true),
+        (
+            "datareporting.policy.dataSubmissionPolicyBypassNotification",
+            true,
+        ),
         ("trailhead.firstrun.didSeeAboutWelcome", true),
         ("browser.startup.firstrunSkipsHomepage", true),
         ("browser.sessionstore.resume_from_crash", false),
@@ -169,7 +173,11 @@ pub fn prefs(o: &Options) -> String {
     }
     // containers (one per account) and Idlerx's own interface
     pref(p, "privacy.userContext.enabled", true);
-    pref(p, "toolkit.legacyUserProfileCustomizations.stylesheets", true);
+    pref(
+        p,
+        "toolkit.legacyUserProfileCustomizations.stylesheets",
+        true,
+    );
     pref(p, "browser.tabs.inTitlebar", 0);
     pref(p, "browser.zoom.siteSpecific", false);
     // windows the pages open become windows of their own (with an address
@@ -184,9 +192,17 @@ pub fn prefs(o: &Options) -> String {
     pref(p, "widget.windows.window_occlusion_tracking.enabled", false);
     pref(p, "dom.suspend_inactive.enabled", false);
     pref(p, "browser.tabs.unloadOnLowMemory", false);
-    pref(p, "dom.ipc.processPriorityManager.backgroundUsesEcoQoS", false);
+    pref(
+        p,
+        "dom.ipc.processPriorityManager.backgroundUsesEcoQoS",
+        false,
+    );
     // the frame limit, done by Firefox itself
-    pref(p, "layout.frame_rate", if o.fps > 0 { o.fps as i64 } else { -1 });
+    pref(
+        p,
+        "layout.frame_rate",
+        if o.fps > 0 { o.fps as i64 } else { -1 },
+    );
     // nothing kept that Idlerx does not use: history (back and forward
     // still work), closed windows, translations, accessibility services
     pref(p, "places.history.enabled", false);
@@ -268,7 +284,8 @@ pub fn prepare(net: &str, o: &Options) -> Result<PathBuf, String> {
     write_if_changed(&chrome.join("userChrome.css"), USER_CHROME.as_bytes())
         .map_err(|e| e.to_string())?;
     if signed_extension() {
-        write_if_changed(&ext.join(format!("{EXTENSION_ID}.xpi")), XPI).map_err(|e| e.to_string())?;
+        write_if_changed(&ext.join(format!("{EXTENSION_ID}.xpi")), XPI)
+            .map_err(|e| e.to_string())?;
     }
     // uBlock Origin: installed once, then kept up to date by Firefox
     let ublock = ext.join(format!("{UBLOCK_ID}.xpi"));
@@ -316,7 +333,11 @@ mod tests {
         assert!(s.contains(r#"user_pref("network.proxy.socks_remote_dns", true);"#));
         assert!(s.contains(r#"user_pref("layout.frame_rate", 30);"#));
         assert!(!s.contains("devtools.debugger.remote-enabled"));
-        let plain = prefs(&Options { proxy: None, fps: 0, ..o });
+        let plain = prefs(&Options {
+            proxy: None,
+            fps: 0,
+            ..o
+        });
         assert!(plain.contains(r#"user_pref("network.proxy.type", 5);"#));
         assert!(plain.contains(r#"user_pref("layout.frame_rate", -1);"#));
     }

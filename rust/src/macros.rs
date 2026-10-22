@@ -18,6 +18,7 @@ pub struct Key {
     /// Name shown and saved.
     pub name: &'static str,
     /// DOM `key` and `code`, Windows virtual-key code, text typed (if any).
+    #[allow(dead_code)] // kept with the table: what the page sees
     pub key: &'static str,
     pub code: &'static str,
     pub vk: u32,

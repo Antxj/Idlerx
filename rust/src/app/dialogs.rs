@@ -439,7 +439,10 @@ impl App {
                 let modal = egui::Modal::new(egui::Id::new("firefox_intro")).show(ctx, |ui| {
                     let dark = ui.visuals().dark_mode;
                     ui.set_width(460.0);
-                    ui.heading(tr!("O Idlerx agora usa o Firefox", "Idlerx now uses Firefox"));
+                    ui.heading(tr!(
+                        "O Idlerx agora usa o Firefox",
+                        "Idlerx now uses Firefox"
+                    ));
                     ui.add_space(6.0);
                     for line in [
                         tr!(
@@ -493,8 +496,10 @@ impl App {
                     );
                     ui.add_space(8.0);
                     ui.add(
-                        egui::Button::new(RichText::new(tr!("Entendi", "Got it")).color(Color32::WHITE))
-                            .fill(ACCENT),
+                        egui::Button::new(
+                            RichText::new(tr!("Entendi", "Got it")).color(Color32::WHITE),
+                        )
+                        .fill(ACCENT),
                     )
                     .clicked()
                 });
@@ -1095,22 +1100,21 @@ impl App {
                         .color(weak(dark)),
                 );
             }
-            egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                for l in &list {
-                    ui.horizontal(|ui| {
-                        ui.label(config::host_of(&l.origin));
-                        ui.label(RichText::new(&l.username).color(weak(dark)));
-                        ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
-                            if ui
-                                .small_button(tr!("Excluir", "Delete"))
-                                .clicked()
-                            {
-                                crate::passwords::remove(&a.profile, &l.origin, &l.username);
-                            }
+            egui::ScrollArea::vertical()
+                .max_height(300.0)
+                .show(ui, |ui| {
+                    for l in &list {
+                        ui.horizontal(|ui| {
+                            ui.label(config::host_of(&l.origin));
+                            ui.label(RichText::new(&l.username).color(weak(dark)));
+                            ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
+                                if ui.small_button(tr!("Excluir", "Delete")).clicked() {
+                                    crate::passwords::remove(&a.profile, &l.origin, &l.username);
+                                }
+                            });
                         });
-                    });
-                }
-            });
+                    }
+                });
             ui.add_space(8.0);
             ui.button(tr!("Fechar", "Close")).clicked()
         });

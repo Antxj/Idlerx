@@ -45,10 +45,17 @@ fn candidates(profile: &str) -> Vec<(PathBuf, PathBuf)> {
     let own = root.join(profile).join("EBWebView");
     out.push((own.join("Default"), own.join("Local State")));
     for dir in old_dirs() {
-        let name = dir.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = dir
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         if name == "_shared" || name.starts_with("_vpn_") {
             let ebw = dir.join("EBWebView");
-            out.push((ebw.join(format!("WV2Profile_{profile}")), ebw.join("Local State")));
+            out.push((
+                ebw.join(format!("WV2Profile_{profile}")),
+                ebw.join("Local State"),
+            ));
         }
     }
     out
@@ -104,7 +111,9 @@ fn decrypt(key: &[u8], data: &[u8]) -> Option<Vec<u8>> {
 fn open_copy(path: &Path) -> Option<(rusqlite::Connection, PathBuf)> {
     let copy = std::env::temp_dir().join(format!("idlerx-move-{}.db", crate::config::new_id()));
     std::fs::copy(path, &copy).ok()?;
-    let db = rusqlite::Connection::open_with_flags(&copy, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
+    let db =
+        rusqlite::Connection::open_with_flags(&copy, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .ok()?;
     Some((db, copy))
 }
 
@@ -153,7 +162,19 @@ fn read_cookies(path: &Path, key: &[u8]) -> Option<Vec<Value>> {
             })
             .ok()?;
         for row in rows.flatten() {
-            let (host, name, plain, enc, path, expires, secure, http_only, same_site, has_expires, partition) = row;
+            let (
+                host,
+                name,
+                plain,
+                enc,
+                path,
+                expires,
+                secure,
+                http_only,
+                same_site,
+                has_expires,
+                partition,
+            ) = row;
             // partitioned (third-party) cookies stay behind
             if !partition.is_empty() {
                 continue;
@@ -161,7 +182,9 @@ fn read_cookies(path: &Path, key: &[u8]) -> Option<Vec<Value>> {
             let value = if enc.is_empty() {
                 plain
             } else {
-                let Some(mut v) = decrypt(key, &enc) else { continue };
+                let Some(mut v) = decrypt(key, &enc) else {
+                    continue;
+                };
                 if version >= 24 && v.len() >= 32 {
                     use sha2::Digest;
                     if v[..32] == sha2::Sha256::digest(host.as_bytes())[..] {
@@ -227,7 +250,9 @@ fn read_logins(path: &Path, key: &[u8]) -> Option<Vec<Login>> {
             let Some(password) = decrypt(key, &enc).and_then(|p| String::from_utf8(p).ok()) else {
                 continue;
             };
-            let Some(origin) = origin_of(&url) else { continue };
+            let Some(origin) = origin_of(&url) else {
+                continue;
+            };
             if !password.is_empty() {
                 out.push(Login {
                     origin,
@@ -285,8 +310,14 @@ mod tests {
 
     #[test]
     fn origins_and_times() {
-        assert_eq!(origin_of("https://game.example/login?x=1").as_deref(), Some("https://game.example"));
-        assert_eq!(origin_of("http://a.b:8080/").as_deref(), Some("http://a.b:8080"));
+        assert_eq!(
+            origin_of("https://game.example/login?x=1").as_deref(),
+            Some("https://game.example")
+        );
+        assert_eq!(
+            origin_of("http://a.b:8080/").as_deref(),
+            Some("http://a.b:8080")
+        );
         assert_eq!(origin_of("nonsense"), None);
         // 2024-01-01 00:00:00 UTC
         assert_eq!(unix_time(13_348_540_800_000_000), 1_704_067_200);
@@ -319,9 +350,29 @@ mod real {
                 Some(m) => println!(
                     "{p}: {} cookies {:?}, {} logins, storage {:?}",
                     m.cookies.len(),
-                    m.cookies.iter().map(|c| format!("{}={}", c["name"].as_str().unwrap_or(""), c["value"].as_str().unwrap_or(""))).collect::<Vec<_>>(),
+                    m.cookies
+                        .iter()
+                        .map(|c| format!(
+                            "{}={}",
+                            c["name"].as_str().unwrap_or(""),
+                            c["value"].as_str().unwrap_or("")
+                        ))
+                        .collect::<Vec<_>>(),
                     m.logins.len(),
-                    m.storage.iter().map(|(o, items)| (o.clone(), items.iter().map(|(k, v)| format!("{k}:{} chars:{}", v.chars().count(), v.chars().take(14).collect::<String>())).collect::<Vec<_>>())).collect::<Vec<_>>()
+                    m.storage
+                        .iter()
+                        .map(|(o, items)| (
+                            o.clone(),
+                            items
+                                .iter()
+                                .map(|(k, v)| format!(
+                                    "{k}:{} chars:{}",
+                                    v.chars().count(),
+                                    v.chars().take(14).collect::<String>()
+                                ))
+                                .collect::<Vec<_>>()
+                        ))
+                        .collect::<Vec<_>>()
                 ),
                 None => println!("{p}: nothing"),
             }

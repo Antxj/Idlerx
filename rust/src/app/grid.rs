@@ -18,7 +18,10 @@ impl App {
 
         if let Err(e) = &self.runtime {
             let e = e.clone();
-            let installing = self.firefox_install.as_ref().map(|r| r.lock().unwrap().clone());
+            let installing = self
+                .firefox_install
+                .as_ref()
+                .map(|r| r.lock().unwrap().clone());
             centered(ui, rect, |ui| {
                 ui.label(RichText::new("⚠").size(36.0).color(FAVORITE));
                 ui.label(
@@ -63,7 +66,10 @@ impl App {
                     actions.push(Action::InstallFirefox);
                 }
                 if ui
-                    .link(tr!("Ou baixe no site da Mozilla", "Or download it from Mozilla's site"))
+                    .link(tr!(
+                        "Ou baixe no site da Mozilla",
+                        "Or download it from Mozilla's site"
+                    ))
                     .clicked()
                 {
                     let _ = open::that("https://www.mozilla.org/firefox/");
@@ -455,7 +461,14 @@ impl App {
         );
         let account = id.to_string();
         if child
-            .add(egui::Button::new(RichText::new(tr!("Salvar", "Save")).small().color(Color32::WHITE)).fill(ACCENT))
+            .add(
+                egui::Button::new(
+                    RichText::new(tr!("Salvar", "Save"))
+                        .small()
+                        .color(Color32::WHITE),
+                )
+                .fill(ACCENT),
+            )
             .clicked()
         {
             actions.push(Action::LoginChoice(account.clone(), LoginChoice::Save));
