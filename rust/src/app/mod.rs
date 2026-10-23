@@ -273,24 +273,6 @@ impl App {
         update::start_periodic_check(check_updates_enabled);
 
         config::delete_pending(&mut cfg);
-        // first start with Firefox: the accounts' saved passwords come from
-        // WebView2 now, their logins (cookies) when each one opens
-        if cfg.webview2_pending.is_none() {
-            let pending: Vec<String> = if crate::migrate::old_dirs().is_empty() {
-                Vec::new()
-            } else {
-                cfg.accounts.iter().map(|a| a.profile.clone()).collect()
-            };
-            for p in &pending {
-                if let Some(m) = crate::migrate::read(p) {
-                    let n = crate::passwords::import(p, m.logins);
-                    if n > 0 {
-                        events::log("Idlerx", &format!("{n} senha(s) trazidas do Edge ({p})"));
-                    }
-                }
-            }
-            cfg.webview2_pending = Some(pending);
-        }
         let mut queue = VecDeque::new();
         for a in &mut cfg.accounts {
             if a.open && cfg.restore_open {
@@ -536,9 +518,7 @@ impl App {
                     in_private: self.cfg.in_private(&acc),
                     fps: self.fps,
                 };
-                // logins and saves from the previous engine, once
-                let moved = self.moved_data(&acc.profile);
-                let slot = panels::open(self.hwnd, &acc, browser, moved, wake);
+                let slot = panels::open(self.hwnd, &acc, browser, wake);
                 self.starting = Some((id, slot));
             }
             _ => {
@@ -546,54 +526,6 @@ impl App {
                 ctx.request_repaint();
             }
         }
-    }
-
-    /// The account's logins (cookies) and sites' saves (localStorage) from
-    /// WebView2, the first time it opens with Firefox.
-    fn moved_data(&mut self, profile: &str) -> crate::migrate::Moved {
-        let profiles: Vec<String> = self
-            .cfg
-            .accounts
-            .iter()
-            .map(|a| a.profile.clone())
-            .collect();
-        let Some(pending) = self.cfg.webview2_pending.as_mut() else {
-            return Default::default();
-        };
-        let had = pending.iter().any(|p| p == profile);
-        pending.retain(|p| p != profile && profiles.contains(p));
-        let done = pending.is_empty();
-        self.mark_dirty();
-        let mut moved = if had {
-            crate::migrate::read(profile).unwrap_or_default()
-        } else {
-            Default::default()
-        };
-        // the passwords came at the start
-        moved.logins.clear();
-        if had {
-            let name = self
-                .cfg
-                .accounts
-                .iter()
-                .find(|a| a.profile == profile)
-                .map(|a| a.name.clone())
-                .unwrap_or_default();
-            events::log(
-                &name,
-                &format!(
-                    "trazidos do Edge: {} cookie(s), dados de {} site(s)",
-                    moved.cookies.len(),
-                    moved.storage.len()
-                ),
-            );
-        }
-        if done {
-            // the old folders stay until the user deletes them in Settings
-            // (a game may keep data there that could not come over)
-            events::log("Idlerx", "todas as contas migradas do Edge");
-        }
-        moved
     }
 
     fn apply(&mut self, action: Action) {

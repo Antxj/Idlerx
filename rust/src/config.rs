@@ -267,9 +267,6 @@ pub struct Config {
     pub tray_hint_shown: bool,
     /// Profile folders still to be deleted (they were in use).
     pub pending_delete: Vec<String>,
-    /// Accounts whose logins still have to come from the previous engine
-    /// (WebView2); None = not looked at yet. See `migrate`.
-    pub webview2_pending: Option<Vec<String>>,
     /// The "Idlerx now uses Firefox" notice was shown.
     pub firefox_intro_shown: bool,
 }
@@ -300,7 +297,6 @@ impl Default for Config {
             block_allow: Vec::new(),
             tray_hint_shown: false,
             pending_delete: Vec::new(),
-            webview2_pending: None,
             firefox_intro_shown: false,
         }
     }

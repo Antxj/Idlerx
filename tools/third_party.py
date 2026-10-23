@@ -39,11 +39,6 @@ Idlerx's Firefox extension
 The extension that connects Idlerx to its Firefox (firefox/extension in the
 repository) is part of Idlerx, under the same GPL-3.0-or-later license.
 
-SQLite
-------
-Built into the executable (through the rusqlite crate) to read the previous
-version's data. SQLite is in the public domain: https://sqlite.org/copyright.html
-
 OpenVPN Community Edition
 -------------------------
 Idlerx.exe embeds the official OpenVPN Community installer

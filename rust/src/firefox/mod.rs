@@ -102,11 +102,6 @@ pub struct OpenSpec {
     pub muted: bool,
     pub net: String,
     pub options: profile::Options,
-    /// Cookies brought from the previous engine, set in the account's
-    /// container before its page opens.
-    pub cookies: Vec<Value>,
-    /// localStorage brought from the previous engine: origin -> items.
-    pub storage: HashMap<String, Vec<(String, String)>>,
 }
 
 enum Incoming {
@@ -408,18 +403,6 @@ impl Engine {
         self.pages.insert(spec.id.clone(), page.clone());
         if let Some(n) = self.nets.get_mut(&spec.net) {
             n.idle_since = None;
-        }
-        // in pieces: Firefox takes at most 1 MB per message
-        for list in spec.cookies.chunks(200) {
-            self.send(
-                &spec.net,
-                json!({ "cmd": "cookies", "container": spec.profile, "list": list }),
-            );
-        }
-        for (origin, items) in &spec.storage {
-            for msg in storage_messages(&spec.profile, origin, items) {
-                self.send(&spec.net, msg);
-            }
         }
         self.send(
             &spec.net,
@@ -866,44 +849,6 @@ impl Engine {
     }
 }
 
-/// A site's localStorage as messages of at most ~400 KB (a value bigger
-/// than that goes in pieces, appended by the extension).
-fn storage_messages(container: &str, origin: &str, items: &[(String, String)]) -> Vec<Value> {
-    const MAX: usize = 400_000;
-    let mut out = Vec::new();
-    let mut batch: Vec<(String, String)> = Vec::new();
-    let mut size = 0;
-    let msg = |items: &[(String, String)], append: bool| json!({ "cmd": "storage", "container": container, "origin": origin, "items": items, "append": append });
-    for (k, v) in items {
-        if v.len() > MAX {
-            let mut piece = String::new();
-            let mut first = true;
-            for c in v.chars() {
-                piece.push(c);
-                if piece.len() >= MAX {
-                    out.push(msg(&[(k.clone(), std::mem::take(&mut piece))], !first));
-                    first = false;
-                }
-            }
-            if !piece.is_empty() || first {
-                out.push(msg(&[(k.clone(), piece)], !first));
-            }
-            continue;
-        }
-        if size + k.len() + v.len() > MAX && !batch.is_empty() {
-            out.push(msg(&batch, false));
-            batch.clear();
-            size = 0;
-        }
-        size += k.len() + v.len();
-        batch.push((k.clone(), v.clone()));
-    }
-    if !batch.is_empty() {
-        out.push(msg(&batch, false));
-    }
-    out
-}
-
 /// Starts a network's Firefox (in the job, so it never outlives Idlerx).
 fn launch(
     firefox: &std::path::Path,
@@ -1198,27 +1143,5 @@ pub fn install() -> Result<(), String> {
             "A instalação do Firefox não terminou ({status}).",
             "Firefox's installation did not finish ({status})."
         ))
-    }
-}
-
-#[cfg(test)]
-mod storage_tests {
-    #[test]
-    fn big_values_go_in_pieces() {
-        let big = "é".repeat(300_000); // 600 KB
-        let items = vec![
-            ("a".to_string(), "1".to_string()),
-            ("save".to_string(), big.clone()),
-        ];
-        let msgs = super::storage_messages("p", "https://g", &items);
-        assert_eq!(msgs.len(), 3);
-        assert_eq!(msgs[0]["append"], false);
-        assert_eq!(msgs[1]["append"], true);
-        let joined: String = msgs[..2]
-            .iter()
-            .map(|m| m["items"][0][1].as_str().unwrap().to_string())
-            .collect();
-        assert_eq!(joined, big);
-        assert_eq!(msgs[2]["items"][0][0], "a");
     }
 }

@@ -171,11 +171,11 @@ is in English and Brazilian Portuguese, following the Windows language.
 
 ### Coming from Idlerx 0.x
 
-Versions up to 0.10 used the Microsoft Edge engine (WebView2). On the first
-start, each account brings its logins (cookies), saved passwords and the
-saves games keep in the browser (localStorage) over to Firefox, by itself.
-If a game asks you to log in, do it once. The old Edge data stays until you
-delete it in **Settings › Delete Edge data**.
+Versions up to 0.10 used the Microsoft Edge engine (WebView2), whose logins
+do not come over to Firefox: log in to each account once more. Games that
+keep progress only in the browser start over, so export your saves in the
+previous version first, if the game has that option. The old Edge data
+stays until you delete it in **Settings › Delete Edge data**.
 
 ## FAQ
 

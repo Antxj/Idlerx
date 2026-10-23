@@ -8,12 +8,11 @@
 mod i18n;
 mod app;
 mod config;
+mod edge;
 mod events;
 mod firefox;
-mod leveldb;
 mod macros;
 mod metrics;
-mod migrate;
 mod panels;
 mod passwords;
 mod single;

@@ -460,12 +460,14 @@ impl App {
                              (allow a site, remove a banner)."
                         ),
                         tr!(
-                            "• Os logins, as senhas salvas e os saves que os jogos guardam no \
-                             navegador vêm do Edge sozinhos, conta por conta. Se algum jogo \
-                             pedir login, entre uma vez.",
-                            "• Each account's logins, saved passwords and the saves games keep \
-                             in the browser come over from Edge by themselves. If a game asks \
-                             you to log in, do it once."
+                            "• Entre de novo uma vez em cada conta: os logins do Edge não vêm \
+                             para o Firefox. Jogos que guardam o progresso só no navegador \
+                             começam do zero; use a opção de exportar o save do jogo na versão \
+                             anterior, se ele tiver.",
+                            "• Log in to each account once more: Edge's logins do not come over \
+                             to Firefox. Games that keep progress only in the browser start \
+                             over; use the game's export option in the previous version, if \
+                             it has one."
                         ),
                         tr!(
                             "• Ctrl+1…9 mostra a conta daquela posição da lista, também de dentro \
@@ -515,16 +517,17 @@ impl App {
                     ctx,
                     tr!("Apagar os dados do Edge?", "Delete the Edge data?"),
                     tr!(
-                        "Apaga as pastas da versão anterior do Idlerx (motor do Edge). Os logins, \
-                         senhas e saves que vieram para o Firefox continuam. Não dá para desfazer.",
-                        "Deletes the folders of Idlerx's previous version (Edge engine). The \
-                         logins, passwords and saves that came over to Firefox stay. It cannot \
-                         be undone."
+                        "Apaga as pastas da versão anterior do Idlerx (motor do Edge), com os \
+                         logins e dados dos sites que ficaram lá. As contas no Firefox não \
+                         mudam. Não dá para desfazer.",
+                        "Deletes the folders of Idlerx's previous version (Edge engine), with \
+                         the logins and site data left there. The accounts in Firefox do not \
+                         change. It cannot be undone."
                     ),
                     tr!("Apagar", "Delete"),
                 ) {
                     Some(true) => {
-                        crate::migrate::delete_old();
+                        crate::edge::delete_old();
                         events::log("Idlerx", "dados do Edge apagados");
                         keep = false;
                     }
@@ -868,16 +871,16 @@ impl App {
                     let _ = std::fs::create_dir_all(&dir);
                     let _ = open::that(dir);
                 }
-                if !crate::migrate::old_dirs().is_empty()
+                if !crate::edge::old_dirs().is_empty()
                     && ui
                         .button(tr!("Apagar dados do Edge…", "Delete Edge data…"))
                         .on_hover_text(tr!(
-                            "Dados da versão anterior do Idlerx (motor do Edge). Os logins, \
-                             senhas e saves das contas já vieram para o Firefox; apague quando \
-                             tiver conferido que os seus jogos estão em dia.",
-                            "Data of Idlerx's previous version (Edge engine). The accounts' \
-                             logins, passwords and saves already came over to Firefox; delete \
-                             it once you have checked that your games are fine."
+                            "Dados da versão anterior do Idlerx (motor do Edge): logins, \
+                             senhas e dados dos sites das contas. O Idlerx com Firefox não \
+                             usa; apague para liberar espaço.",
+                            "Data of Idlerx's previous version (Edge engine): the accounts' \
+                             logins, passwords and site data. Idlerx with Firefox does not \
+                             use it; delete it to free the space."
                         ))
                         .clicked()
                 {

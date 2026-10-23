@@ -60,19 +60,6 @@
   if (!/^https?:$/.test(location.protocol)) return;
   const origin = location.origin;
 
-  // the site's saves from the previous engine (localStorage), put back once,
-  // then the page loads again with them
-  if (window.top === window) {
-    browser.runtime.sendMessage({ t: 'restore', origin }).then((site) => {
-      if (!site) return;
-      let n = 0;
-      for (const [k, v] of Object.entries(site)) {
-        try { localStorage.setItem(k, v); n++; } catch (e) {}
-      }
-      browser.runtime.sendMessage({ t: 'restored', origin, n }).catch(() => {});
-    }, () => {});
-  }
-
   // ---- saved passwords of this account (kept by Idlerx, never by Firefox) ----
   let logins = null;
   let asked = false;

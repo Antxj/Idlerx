@@ -48,13 +48,7 @@ pub fn network(vpn: Option<&str>) -> String {
 
 /// Starts opening an account inside `parent` (the main window). `wake` is
 /// called when the slot is filled.
-pub fn open(
-    parent: isize,
-    account: &Account,
-    browser: Browser,
-    moved: crate::migrate::Moved,
-    wake: Wake,
-) -> PanelSlot {
+pub fn open(parent: isize, account: &Account, browser: Browser, wake: Wake) -> PanelSlot {
     let slot: PanelSlot = Rc::new(RefCell::new(None));
     let net = network(browser.vpn.map(|(g, _)| g));
     let spec = firefox::OpenSpec {
@@ -75,8 +69,6 @@ pub fn open(
             proxy: browser.vpn.map(|(_, port)| port),
             debugger: None,
         },
-        cookies: moved.cookies,
-        storage: moved.storage,
     };
     let s = slot.clone();
     let keep_active = browser.keep_active;

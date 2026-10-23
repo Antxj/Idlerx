@@ -128,25 +128,3 @@ pub fn forget(profile: &str) {
         }
     });
 }
-
-/// Logins brought from elsewhere (the previous engine), without replacing
-/// what the account already has.
-pub fn import(profile: &str, logins: Vec<Login>) -> usize {
-    with(|s| {
-        let list = s.logins.entry(profile.to_string()).or_default();
-        let mut added = 0;
-        for l in logins {
-            if !list
-                .iter()
-                .any(|x| x.origin == l.origin && x.username == l.username)
-            {
-                list.push(l);
-                added += 1;
-            }
-        }
-        if added > 0 {
-            save(s);
-        }
-        added
-    })
-}

@@ -19,8 +19,6 @@
     "tabs",
     "webNavigation",
     "browserSettings",
-    "storage",
-    "unlimitedStorage",
     "<all_urls>"
   ],
   "background": {
