@@ -108,6 +108,10 @@ impl Window {
         }
     }
 
+    pub fn visible(self) -> bool {
+        unsafe { wm::IsWindowVisible(self.h()) != 0 }
+    }
+
     pub fn hide(self) {
         unsafe { wm::ShowWindow(self.h(), wm::SW_HIDE) };
     }
@@ -257,17 +261,89 @@ fn keyboard_window(of: Window) -> Option<Window> {
         if wm::GetGUIThreadInfo(thread, &mut info) == 0 || info.hwndFocus.is_null() {
             return None;
         }
-        // focus may be on a child of the account's window
+        // focus may be on a child of the account's window: the account's is
+        // the Firefox window embedded in Idlerx's (its parent is not Firefox's)
         let mut h = info.hwndFocus;
         loop {
-            if class_of(h) == "MozillaWindowClass" && title_of(h).contains("\u{2063}idlerx:") {
-                return Some(Window(h as isize));
-            }
             let parent = wm::GetParent(h);
             if parent.is_null() {
                 return None;
             }
+            if class_of(h) == "MozillaWindowClass" && class_of(parent) != "MozillaWindowClass" {
+                return Some(Window(h as isize));
+            }
             h = parent;
         }
+    }
+}
+
+// ------------------------------------------------------------------ focus --
+
+thread_local! {
+    /// Windows that got the keyboard focus (see `watch_focus`).
+    static FOCUSED: std::cell::RefCell<Vec<isize>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+static WAKE: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>> = std::sync::OnceLock::new();
+
+/// Tells Idlerx when a Firefox window gets the focus (the user clicked in
+/// an account), whatever its page: Windows reports it (a blank page has no
+/// extension script to do it).
+pub fn watch_focus(wake: impl Fn() + Send + Sync + 'static) {
+    use windows_sys::Win32::UI::Accessibility::SetWinEventHook;
+    let _ = WAKE.set(Box::new(wake));
+    unsafe {
+        SetWinEventHook(
+            wm::EVENT_OBJECT_FOCUS,
+            wm::EVENT_OBJECT_FOCUS,
+            std::ptr::null_mut(),
+            Some(focus_event),
+            0,
+            0,
+            wm::WINEVENT_OUTOFCONTEXT,
+        );
+    }
+}
+
+unsafe extern "system" fn focus_event(
+    _hook: windows_sys::Win32::UI::Accessibility::HWINEVENTHOOK,
+    _event: u32,
+    hwnd: HWND,
+    _object: i32,
+    _child: i32,
+    _thread: u32,
+    _time: u32,
+) {
+    if hwnd.is_null() || class_of(hwnd) != "MozillaWindowClass" {
+        return;
+    }
+    FOCUSED.with(|f| f.borrow_mut().push(hwnd as isize));
+    if let Some(w) = WAKE.get() {
+        w();
+    }
+}
+
+/// Firefox windows that got the focus since the last call.
+pub fn take_focused() -> Vec<Window> {
+    FOCUSED
+        .with(|f| std::mem::take(&mut *f.borrow_mut()))
+        .into_iter()
+        .map(Window)
+        .collect()
+}
+
+impl Window {
+    /// This window, or one of its parents, is `account`.
+    pub fn within(self, account: Window) -> bool {
+        let mut h = self.h();
+        for _ in 0..8 {
+            if h.is_null() {
+                return false;
+            }
+            if h as isize == account.0 {
+                return true;
+            }
+            h = unsafe { wm::GetParent(h) };
+        }
+        false
     }
 }

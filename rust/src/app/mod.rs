@@ -1288,6 +1288,21 @@ impl eframe::App for App {
             }
             ctx.request_repaint_after(Duration::from_secs(1));
         }
+        // IDLERX_SCREENSHOT=focus-test (tests): the second account's window
+        // gets the keyboard at 8 s, as a click would do
+        if self.screenshot.as_deref() == Some("focus-test")
+            && self.created.elapsed() > Duration::from_secs(8)
+            && self.macro_started_once.insert("focused".into())
+        {
+            if let Some(p) = self
+                .cfg
+                .display_order()
+                .get(1)
+                .and_then(|id| self.panels.get(id))
+            {
+                p.focus();
+            }
+        }
         // IDLERX_SCREENSHOT=login-save (tests): every login offered is saved
         if self.screenshot.as_deref() == Some("login-save") {
             let ids: Vec<String> = self

@@ -84,12 +84,26 @@ pub struct Page {
     pub loaded: Cell<bool>,
     pub failure: Cell<Option<Failure>>,
     pub got_focus: Cell<bool>,
-    /// Last click or key a macro sent (the page's "focused" that follows
-    /// is not the user's).
+    /// Last click or key a macro sent, or when the window was embedded (the
+    /// focus that follows is not the user's).
     pub macro_input: Cell<Option<Instant>>,
     pub hotkey: Cell<Option<Hotkey>>,
     pub recording: Cell<bool>,
     pub recorded: RefCell<Vec<Value>>,
+}
+
+impl Page {
+    /// The page got the mouse or keyboard: the user's, unless a macro just
+    /// sent input to it.
+    fn focused(&self) {
+        let by_macro = self
+            .macro_input
+            .get()
+            .is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
+        if !by_macro {
+            self.got_focus.set(true);
+        }
+    }
 }
 
 /// What an account opens with.
@@ -216,6 +230,8 @@ pub fn init(waker: Waker) -> Result<(), String> {
         waker.clone(),
     );
     let _ = host::register();
+    let w = waker.clone();
+    window::watch_focus(move || w());
     let engine = Engine {
         port,
         token,
@@ -530,6 +546,17 @@ impl Engine {
     /// Firefoxes to close. Asks for frames while something is on its way.
     fn pump(&mut self) -> Vec<Later> {
         let mut later: Vec<Later> = Vec::new();
+        // the user clicked in an account's window
+        for w in window::take_focused() {
+            let page = self.pages.values().find(|p| {
+                p.window
+                    .get()
+                    .is_some_and(|pw| pw.visible() && w.within(pw))
+            });
+            if let Some(p) = page {
+                p.focused();
+            }
+        }
         while let Ok(msg) = self.rx.try_recv() {
             match msg {
                 Incoming::Connected { net } => self.connected(&net),
@@ -617,6 +644,8 @@ impl Engine {
             let marker = w.page.marker.borrow().clone();
             if let Some(m) = marker {
                 if let Some(win) = window::find(&m, parent) {
+                    // embedding moves the focus for a moment: not the user's
+                    w.page.macro_input.set(Some(Instant::now()));
                     win.embed(parent);
                     w.page.window.set(Some(win));
                     done.push((i, Ok(())));
@@ -791,13 +820,7 @@ impl Engine {
             }
             "focus" => {
                 if let Some(p) = page {
-                    let by_macro = p
-                        .macro_input
-                        .get()
-                        .is_some_and(|t| t.elapsed() < Duration::from_millis(1500));
-                    if !by_macro {
-                        p.got_focus.set(true);
-                    }
+                    p.focused();
                 }
             }
             "captured" => {
