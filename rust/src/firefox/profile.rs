@@ -85,6 +85,10 @@ pub fn prefs(o: &Options) -> String {
     pref(p, "startup.homepage_welcome_url", "");
     pref(p, "startup.homepage_welcome_url.additional", "");
     pref(p, "browser.sessionstore.interval", 60000);
+    // no early window while Firefox loads: it would show on the screen
+    // before Idlerx can hide it (the start window opens minimized)
+    pref(p, "browser.startup.preXulSkeletonUI", false);
+    pref(p, "browser.startup.blankWindow", false);
     // never the "troubleshoot mode?" question after Firefox was ended by
     // force (Idlerx closing, a crash): it would hold the start
     pref(p, "toolkit.startup.max_resumed_crashes", -1);
@@ -231,6 +235,10 @@ pub fn prefs(o: &Options) -> String {
     // extensions in the profile folder start enabled; fixed internal
     // addresses
     pref(p, "extensions.autoDisableScopes", 0);
+    // a new version of an extension in the profile folder (Idlerx's, after
+    // an update of Idlerx) is installed when Firefox starts, not while it
+    // runs: that restarted the extension and dropped its link to Idlerx
+    pref(p, "extensions.startupScanScopes", 1);
     pref(p, "extensions.webextensions.uuids", UUIDS);
     if let Some(port) = o.proxy {
         // group with a VPN: everything through its gate, nothing direct

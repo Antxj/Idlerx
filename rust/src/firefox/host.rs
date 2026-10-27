@@ -38,8 +38,28 @@ pub fn read_frame(r: &mut impl Read) -> Option<Vec<u8>> {
     Some(buf)
 }
 
+/// Development: why the relay ended, in a file next to the profiles.
+fn trace(what: &str) {
+    if let Ok(path) = std::env::var("IDLERX_RELAY_TRACE") {
+        use std::io::Write as _;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(
+                f,
+                "{:?} pid={} {what}",
+                std::time::SystemTime::now(),
+                std::process::id()
+            );
+        }
+    }
+}
+
 /// The relay: runs until Firefox or Idlerx goes away.
 pub fn run() -> ! {
+    trace("start");
     let port: u16 = std::env::var(ENV_PORT)
         .ok()
         .and_then(|p| p.parse().ok())
@@ -63,9 +83,17 @@ pub fn run() -> ! {
         let mut buf = [0u8; 64 * 1024];
         loop {
             match to_firefox.read(&mut buf) {
-                Ok(0) | Err(_) => std::process::exit(0),
+                Ok(0) => {
+                    trace("idlerx closed the socket");
+                    std::process::exit(0)
+                }
+                Err(e) => {
+                    trace(&format!("socket read error {e}"));
+                    std::process::exit(0)
+                }
                 Ok(n) => {
-                    if out.write_all(&buf[..n]).and_then(|_| out.flush()).is_err() {
+                    if let Err(e) = out.write_all(&buf[..n]).and_then(|_| out.flush()) {
+                        trace(&format!("stdout write error {e}"));
                         std::process::exit(0);
                     }
                 }
@@ -77,9 +105,17 @@ pub fn run() -> ! {
     let mut buf = [0u8; 64 * 1024];
     loop {
         match input.read(&mut buf) {
-            Ok(0) | Err(_) => std::process::exit(0),
+            Ok(0) => {
+                trace("firefox closed stdin");
+                std::process::exit(0)
+            }
+            Err(e) => {
+                trace(&format!("stdin read error {e}"));
+                std::process::exit(0)
+            }
             Ok(n) => {
-                if sock.write_all(&buf[..n]).is_err() {
+                if let Err(e) = sock.write_all(&buf[..n]) {
+                    trace(&format!("socket write error {e}"));
                     std::process::exit(0);
                 }
             }

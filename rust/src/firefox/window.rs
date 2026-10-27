@@ -57,6 +57,11 @@ impl Window {
         self.0 as HWND
     }
 
+    /// The window still exists and is not embedded.
+    pub fn exists_top_level(self) -> bool {
+        unsafe { wm::IsWindow(self.h()) != 0 && wm::GetParent(self.h()).is_null() }
+    }
+
     /// Process of the window (Firefox's main process).
     pub fn pid(self) -> u32 {
         let mut pid = 0u32;
@@ -302,6 +307,37 @@ pub fn watch_focus(wake: impl Fn() + Send + Sync + 'static) {
             wm::WINEVENT_OUTOFCONTEXT,
         );
     }
+    // windows that show are seen on a thread of their own: Idlerx's own
+    // thread may be busy drawing, and they must be hidden at once
+    std::thread::spawn(|| unsafe {
+        SetWinEventHook(
+            wm::EVENT_OBJECT_SHOW,
+            wm::EVENT_OBJECT_SHOW,
+            std::ptr::null_mut(),
+            Some(show_event),
+            0,
+            0,
+            wm::WINEVENT_OUTOFCONTEXT,
+        );
+        let mut msg: wm::MSG = std::mem::zeroed();
+        while wm::GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0) > 0 {
+            wm::DispatchMessageW(&msg);
+        }
+    });
+}
+
+unsafe extern "system" fn show_event(
+    _hook: windows_sys::Win32::UI::Accessibility::HWINEVENTHOOK,
+    _event: u32,
+    hwnd: HWND,
+    object: i32,
+    _child: i32,
+    _thread: u32,
+    _time: u32,
+) {
+    if object == wm::OBJID_WINDOW && !hwnd.is_null() && class_of(hwnd) == "MozillaWindowClass" {
+        shown(hwnd);
+    }
 }
 
 unsafe extern "system" fn focus_event(
@@ -345,5 +381,75 @@ impl Window {
             h = unsafe { wm::GetParent(h) };
         }
         false
+    }
+}
+
+// ------------------------------------------------------------- held back --
+
+/// The job of Idlerx's Firefoxes, while one of them starts or opens
+/// accounts: their new windows are held back (see `guard`).
+static GUARDED: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
+/// Windows held back, and since when.
+static HELD: std::sync::Mutex<Vec<(isize, std::time::Instant)>> = std::sync::Mutex::new(Vec::new());
+
+/// While a Firefox starts or opens accounts (`job` is the job its processes
+/// are in; 0: none does), new top-level windows of Idlerx's Firefoxes are
+/// hidden the moment they show (Firefox shows its start window, and creates
+/// each account's window on the screen before minimizing it): nothing
+/// flashes outside Idlerx.
+pub fn guard(job: isize) {
+    GUARDED.store(job, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Windows held back since the last call, with when.
+pub fn take_held() -> Vec<(Window, std::time::Instant)> {
+    std::mem::take(&mut *HELD.lock().unwrap())
+        .into_iter()
+        .map(|(w, t)| (Window(w), t))
+        .collect()
+}
+
+unsafe fn shown(hwnd: HWND) {
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+    let job = GUARDED.load(std::sync::atomic::Ordering::Relaxed);
+    // only top-level windows (embedded accounts are children)
+    if job == 0 || !wm::GetParent(hwnd).is_null() {
+        return;
+    }
+    let mut pid = 0u32;
+    wm::GetWindowThreadProcessId(hwnd, &mut pid);
+    let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+    if process.is_null() {
+        return;
+    }
+    let mut ours = 0;
+    windows_sys::Win32::System::JobObjects::IsProcessInJob(process, job as _, &mut ours);
+    windows_sys::Win32::Foundation::CloseHandle(process);
+    if ours == 0 {
+        return;
+    }
+    wm::ShowWindow(hwnd, wm::SW_HIDE);
+    HELD.lock()
+        .unwrap()
+        .push((hwnd as isize, std::time::Instant::now()));
+    if let Some(w) = WAKE.get() {
+        w();
+    }
+}
+
+impl Window {
+    /// The window has an account's marker in its title.
+    pub fn is_account(self) -> bool {
+        title_of(self.h()).contains("\u{2063}idlerx:")
+    }
+
+    /// Shows a window that was held back but is not an account's (a window
+    /// a page opened), without taking the focus away.
+    pub fn release(self) {
+        unsafe {
+            if wm::GetParent(self.h()).is_null() {
+                wm::ShowWindow(self.h(), wm::SW_SHOWNOACTIVATE);
+            }
+        }
     }
 }

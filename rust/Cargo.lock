@@ -1250,7 +1250,7 @@ dependencies = [
 
 [[package]]
 name = "idlerx"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "base32",
  "base64",

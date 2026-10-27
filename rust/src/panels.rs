@@ -147,6 +147,7 @@ impl Panel {
     }
 
     fn tell_hidden(&self, hidden: bool) {
+        self.page.hidden.set((hidden, self.keep_active));
         if self.hidden_sent.replace(Some(hidden)) != Some(hidden) {
             self.send(serde_json::json!({
                 "cmd": "hidden",

@@ -38,6 +38,9 @@ pub const MIN_VERSION: u32 = 140;
 const IDLE_CLOSE: Duration = Duration::from_secs(20);
 /// How long an account's window may take to show up.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(40);
+/// How long an extension that restarted (Firefox still running) may take to
+/// connect again.
+const RECONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long a network's Firefox may take to connect its extension.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -90,6 +93,9 @@ pub struct Page {
     pub hotkey: Cell<Option<Hotkey>>,
     pub recording: Cell<bool>,
     pub recorded: RefCell<Vec<Value>>,
+    /// Hidden state last told to the page, and "keep running".
+    pub hidden: Cell<(bool, bool)>,
+    pub private: bool,
 }
 
 impl Page {
@@ -154,6 +160,10 @@ struct Net {
     keeper: Option<Window>,
     started: Instant,
     closing: bool,
+    /// The link to the extension dropped with Firefox still running (its
+    /// extension restarting): given up at this moment if it does not come
+    /// back.
+    reconnect_until: Option<Instant>,
 }
 
 type Ready = Box<dyn FnOnce(Result<Rc<Page>, String>)>;
@@ -188,6 +198,10 @@ pub struct Engine {
     offers: Vec<LoginOffer>,
     generation: u64,
     started_at: std::time::SystemTime,
+    /// Windows held back while their Firefox opened accounts (see
+    /// `window::guard`): accounts' are embedded, the start window becomes
+    /// the keeper, the others (opened by pages) are shown again.
+    held: Vec<(Window, Instant)>,
 }
 
 thread_local! {
@@ -254,6 +268,7 @@ pub fn init(waker: Waker) -> Result<(), String> {
         offers: Vec::new(),
         generation: 0,
         started_at: std::time::SystemTime::now(),
+        held: Vec::new(),
     };
     ENGINE.with(|e| *e.borrow_mut() = Some(engine));
     Ok(())
@@ -417,6 +432,8 @@ impl Engine {
             hotkey: Cell::new(None),
             recording: Cell::new(false),
             recorded: RefCell::new(Vec::new()),
+            hidden: Cell::new((true, true)),
+            private: spec.private,
         });
         self.pages.insert(spec.id.clone(), page.clone());
         if let Some(n) = self.nets.get_mut(&spec.net) {
@@ -434,6 +451,7 @@ impl Engine {
                 "muted": spec.muted,
             }),
         );
+        window::guard(self.job);
         self.waiting.push(Waiting {
             page,
             ready,
@@ -492,9 +510,11 @@ impl Engine {
                 keeper: None,
                 started: Instant::now(),
                 closing: false,
+                reconnect_until: None,
             },
         );
         let (tx, waker) = (self.tx.clone(), self.waker.clone());
+        window::guard(self.job);
         let (port, token, job, net) = (self.port, self.token.clone(), self.job, net.to_string());
         std::thread::spawn(move || {
             let result = launch(&firefox, &net, &options, port, &token, job);
@@ -568,45 +588,35 @@ impl Engine {
                     }
                 }
                 Incoming::Disconnected { net } => {
-                    let gone = self.nets.get(&net).is_some_and(|n| n.connected);
-                    if gone {
-                        let closing = self.nets.get(&net).is_some_and(|n| n.closing);
-                        if closing {
-                            log(&net, "Firefox fechado (sem contas)");
-                        } else {
-                            // what happened: the Firefox ended (how), or only
-                            // its link to Idlerx; a crash leaves a report
-                            let browser = self.nets.get(&net).and_then(|n| n.browser);
-                            let how = match browser.map(exit_code) {
-                                Some(None) => {
-                                    "a ligação com a extensão caiu (o Firefox continuava aberto)"
-                                        .to_string()
-                                }
-                                Some(Some(code)) => format!("o Firefox fechou (código {code:#x})"),
-                                None => "o Firefox fechou".to_string(),
-                            };
-                            let dump = new_crash_report(self.started_at);
-                            match dump {
-                                Some(d) => {
-                                    log(&net, &format!("{how}; relatório de travamento: {d}"))
-                                }
-                                None => log(&net, &how),
-                            }
+                    let Some(n) = self.nets.get(&net).filter(|n| n.connected) else {
+                        continue;
+                    };
+                    let closing = n.closing;
+                    let alive = n.browser.is_some_and(|pid| exit_code(pid).is_none());
+                    if alive && !closing {
+                        // the extension restarted (an update, for one):
+                        // Firefox and its windows are fine, it connects again
+                        log(&net, "a ligação com a extensão caiu; esperando ela voltar (o Firefox continua aberto)");
+                        if let Some(n) = self.nets.get_mut(&net) {
+                            n.connected = false;
+                            n.reconnect_until = Some(Instant::now() + RECONNECT_TIMEOUT);
                         }
-                        // whatever is left of that Firefox goes too: a new
-                        // one needs its profile
-                        if let Some(n) = self.nets.remove(&net) {
-                            for pid in [n.browser, n.launcher].into_iter().flatten() {
-                                kill(pid);
-                            }
-                        }
-                        if !closing {
-                            for p in self.pages.values().filter(|p| p.net == net) {
-                                p.failure.set(Some(Failure::BrowserGone));
-                            }
-                        }
-                        later.extend(self.fail_waiting(&net, "o Firefox fechou"));
+                        continue;
                     }
+                    if closing {
+                        log(&net, "Firefox fechado (sem contas)");
+                    } else {
+                        let how = match n.browser.map(exit_code) {
+                            Some(Some(code)) => format!("o Firefox fechou (código {code:#x})"),
+                            _ => "o Firefox fechou".to_string(),
+                        };
+                        match new_crash_report(self.started_at) {
+                            Some(d) => log(&net, &format!("{how}; relatório de travamento: {d}")),
+                            None => log(&net, &how),
+                        }
+                    }
+                    self.net_gone(&net, closing);
+                    later.extend(self.fail_waiting(&net, "o Firefox fechou"));
                 }
                 Incoming::Started {
                     net,
@@ -634,7 +644,9 @@ impl Engine {
                 }
             }
         }
-        let mut busy = false;
+        self.guard_windows();
+        // held windows are looked at again until sorted out
+        let mut busy = !self.held.is_empty();
         // the window Firefox opens when it starts: hidden, it keeps that
         // Firefox running while it has no account
         for n in self.nets.values_mut() {
@@ -684,12 +696,26 @@ impl Engine {
                 }
             }
         }
+        // an extension that restarted and did not connect again in time
+        let lost: Vec<String> = self
+            .nets
+            .iter()
+            .filter(|(_, n)| !n.connected && n.reconnect_until.is_some_and(|t| Instant::now() > t))
+            .map(|(k, _)| k.clone())
+            .collect();
+        for net in lost {
+            log(&net, "a extensão não voltou em 15 s: fechando esse Firefox");
+            self.net_gone(&net, false);
+            later.extend(self.fail_waiting(&net, "a extensão do Firefox não voltou"));
+        }
         // a Firefox that never connected: given up (its accounts can be
         // opened again)
         let stuck: Vec<String> = self
             .nets
             .iter()
-            .filter(|(_, n)| !n.connected && n.started.elapsed() > CONNECT_TIMEOUT)
+            .filter(|(_, n)| {
+                !n.connected && n.reconnect_until.is_none() && n.started.elapsed() > CONNECT_TIMEOUT
+            })
             .map(|(k, _)| k.clone())
             .collect();
         for net in stuck {
@@ -731,6 +757,63 @@ impl Engine {
         later
     }
 
+    /// New windows of a Firefox that starts or opens accounts are held back
+    /// (hidden as they show); held ones are sorted out here.
+    fn guard_windows(&mut self) {
+        for n in self.nets.values_mut().filter(|n| n.browser.is_none()) {
+            n.browser = n.launcher.and_then(child_process);
+        }
+        let opening = !self.waiting.is_empty() || self.nets.values().any(|n| !n.connected);
+        window::guard(if opening { self.job } else { 0 });
+        self.held.extend(window::take_held());
+        let keepers: Vec<Window> = self.nets.values().filter_map(|n| n.keeper).collect();
+        let mut keep = Vec::new();
+        for (w, since) in std::mem::take(&mut self.held) {
+            if !w.exists_top_level() || keepers.contains(&w) || w.is_account() {
+                continue;
+            }
+            // the first window of a starting Firefox: its start window
+            let net = self
+                .nets
+                .values_mut()
+                .find(|n| n.keeper.is_none() && n.browser.is_some_and(|b| b == w.pid()));
+            if let Some(n) = net {
+                w.make_keeper();
+                n.keeper = Some(w);
+                continue;
+            }
+            // not an account's after a moment (its Firefox done opening
+            // accounts): a window a page opened
+            let opening = self.nets.iter().any(|(k, n)| {
+                n.browser.is_some_and(|b| b == w.pid())
+                    && (!n.connected || self.waiting.iter().any(|x| &x.page.net == k))
+            });
+            let wait = if opening { 15 } else { 3 };
+            if since.elapsed() > Duration::from_secs(wait) {
+                w.release();
+            } else {
+                keep.push((w, since));
+            }
+        }
+        self.held = keep;
+    }
+
+    /// A network's Firefox is gone (or given up): whatever is left of it
+    /// ends (a new one needs its profile) and its accounts open again.
+    fn net_gone(&mut self, net: &str, closing: bool) {
+        if let Some(n) = self.nets.remove(net) {
+            for pid in [n.browser, n.launcher].into_iter().flatten() {
+                kill(pid);
+            }
+        }
+        self.writers.lock().unwrap().remove(net);
+        if !closing {
+            for p in self.pages.values().filter(|p| p.net == net) {
+                p.failure.set(Some(Failure::BrowserGone));
+            }
+        }
+    }
+
     fn fail_waiting(&mut self, net: &str, why: &str) -> Vec<Later> {
         let (fail, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut self.waiting)
             .into_iter()
@@ -750,14 +833,40 @@ impl Engine {
             return;
         };
         n.connected = true;
-        log(
-            net,
-            &format!(
-                "extensão conectada ({:.1} s)",
-                n.started.elapsed().as_secs_f32()
-            ),
-        );
+        let again = n.reconnect_until.take().is_some();
+        if again {
+            log(net, "a extensão voltou");
+        } else {
+            log(
+                net,
+                &format!(
+                    "extensão conectada ({:.1} s)",
+                    n.started.elapsed().as_secs_f32()
+                ),
+            );
+        }
         let mut pending = std::mem::take(&mut n.pending);
+        if again {
+            // its accounts, which it no longer knows (their windows are
+            // still open), with their state
+            let accounts: Vec<Value> = self
+                .pages
+                .values()
+                .filter(|p| p.net == net)
+                .map(|p| {
+                    let (hidden, awake) = p.hidden.get();
+                    json!({
+                        "id": p.id,
+                        "container": p.profile,
+                        "private": p.private,
+                        "hidden": hidden,
+                        "awake": awake,
+                        "rec": p.recording.get(),
+                    })
+                })
+                .collect();
+            pending.insert(0, json!({ "cmd": "adopt", "accounts": accounts }));
+        }
         // first of all, the containers that must go (never with an empty
         // list: that would be every account's)
         if !self.keep.is_empty() {
@@ -897,43 +1006,95 @@ fn launch(
     token: &str,
     job: isize,
 ) -> Result<u32, String> {
-    use std::os::windows::process::CommandExt;
-    use std::process::Command;
-    const CREATE_SUSPENDED: u32 = 0x0000_0004;
     let dir = profile::prepare(net, o)?;
     // a Firefox left with this profile (still closing) would keep it
     // locked: the new one would quit at once
     end_firefox_using(&dir);
-    let mut cmd = Command::new(firefox);
-    cmd.args([
-        "--new-instance",
-        "-no-remote",
-        "--wait-for-browser",
-        "-profile",
-    ])
-    .arg(&dir);
+    let quote = |a: &str| format!("\"{}\"", a.replace('"', ""));
+    let mut line = vec![
+        quote(&firefox.to_string_lossy()),
+        "--new-instance".into(),
+        "-no-remote".into(),
+        "--wait-for-browser".into(),
+        "-profile".into(),
+        quote(&dir.to_string_lossy()),
+    ];
     if let Some(p) = o.debugger {
-        cmd.args(["--start-debugger-server", &p.to_string()]);
+        line.push("--start-debugger-server".into());
+        line.push(p.to_string());
     }
-    cmd.arg("about:blank")
-        .env(host::ENV_PORT, port.to_string())
-        .env(host::ENV_TOKEN, token)
-        .env(host::ENV_NET, net)
+    line.push("about:blank".into());
+    let extra = [
+        (host::ENV_PORT, port.to_string()),
+        (host::ENV_TOKEN, token.to_string()),
+        (host::ENV_NET, net.to_string()),
         // a crash leaves a report in Idlerx's folder (no window, nothing sent)
-        .env("MOZ_CRASHREPORTER_NO_REPORT", "1")
-        .env("MOZ_CRASHREPORTER_DATA_DIRECTORY", crash_dir())
-        .creation_flags(CREATE_SUSPENDED);
-    let child = cmd.spawn().map_err(|e| e.to_string())?;
-    let pid = child.id();
-    {
-        use std::os::windows::io::AsRawHandle;
-        assign_to_job(job, child.as_raw_handle() as isize);
-    }
-    resume(pid);
+        ("MOZ_CRASHREPORTER_NO_REPORT", "1".to_string()),
+        (
+            "MOZ_CRASHREPORTER_DATA_DIRECTORY",
+            crash_dir().to_string_lossy().to_string(),
+        ),
+    ];
+    let pid = spawn_minimized(&line.join(" "), &extra, job)?;
     if let Some(p) = o.debugger {
         rdp::install_extension(p)?;
     }
     Ok(pid)
+}
+
+/// Starts a process (suspended until it is in the job) with its first
+/// window minimized and without taking the focus: Firefox's start window
+/// never shows on the screen. Returns its id.
+fn spawn_minimized(
+    command_line: &str,
+    extra_env: &[(&str, String)],
+    job: isize,
+) -> Result<u32, String> {
+    use windows_sys::Win32::System::Threading::*;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWMINNOACTIVE;
+    // the environment: Idlerx's own, plus the variables for the relay
+    let mut env: Vec<(String, String)> = std::env::vars()
+        .filter(|(k, _)| !extra_env.iter().any(|(e, _)| e.eq_ignore_ascii_case(k)))
+        .collect();
+    env.extend(extra_env.iter().map(|(k, v)| (k.to_string(), v.clone())));
+    env.sort_by_key(|(k, _)| k.to_uppercase());
+    let mut block: Vec<u16> = Vec::new();
+    for (k, v) in &env {
+        block.extend(format!("{k}={v}").encode_utf16());
+        block.push(0);
+    }
+    block.push(0);
+    let mut line: Vec<u16> = command_line.encode_utf16().chain(Some(0)).collect();
+    unsafe {
+        let mut si: STARTUPINFOW = std::mem::zeroed();
+        si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
+        si.dwFlags = STARTF_USESHOWWINDOW;
+        si.wShowWindow = SW_SHOWMINNOACTIVE as u16;
+        let mut pi: PROCESS_INFORMATION = std::mem::zeroed();
+        let ok = CreateProcessW(
+            std::ptr::null(),
+            line.as_mut_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            0,
+            CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT,
+            block.as_ptr() as *const _,
+            std::ptr::null(),
+            &si,
+            &mut pi,
+        );
+        if ok == 0 {
+            return Err(format!(
+                "CreateProcess: {}",
+                windows_sys::Win32::Foundation::GetLastError()
+            ));
+        }
+        assign_to_job(job, pi.hProcess as isize);
+        ResumeThread(pi.hThread);
+        windows_sys::Win32::Foundation::CloseHandle(pi.hThread);
+        windows_sys::Win32::Foundation::CloseHandle(pi.hProcess);
+        Ok(pi.dwProcessId)
+    }
 }
 
 /// A line in the pages log about a network's Firefox.
@@ -1008,32 +1169,6 @@ fn assign_to_job(job: isize, process: isize) {
         unsafe {
             windows_sys::Win32::System::JobObjects::AssignProcessToJobObject(job as _, process as _)
         };
-    }
-}
-
-/// Lets a process started suspended run (all its threads).
-fn resume(pid: u32) {
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::*;
-    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
-    unsafe {
-        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-        if snap.is_null() || snap as isize == -1 {
-            return;
-        }
-        let mut t: THREADENTRY32 = std::mem::zeroed();
-        t.dwSize = std::mem::size_of::<THREADENTRY32>() as u32;
-        let mut ok = Thread32First(snap, &mut t);
-        while ok != 0 {
-            if t.th32OwnerProcessID == pid {
-                let h = OpenThread(THREAD_SUSPEND_RESUME, 0, t.th32ThreadID);
-                if !h.is_null() {
-                    ResumeThread(h);
-                    windows_sys::Win32::Foundation::CloseHandle(h);
-                }
-            }
-            ok = Thread32Next(snap, &mut t);
-        }
-        windows_sys::Win32::Foundation::CloseHandle(snap);
     }
 }
 

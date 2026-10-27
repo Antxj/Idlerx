@@ -78,6 +78,27 @@ async function command(m) {
       send({ ev: 'opened', id: m.id, marker: marker(m.id).trim() });
       break;
     }
+    case 'adopt': {
+      // the extension restarted (an update) with the accounts' windows
+      // still open: Idlerx tells which they are
+      const want = new Map((m.accounts || []).map((x) => [containerName(x.container, !!x.private), x]));
+      for (const c of await browser.contextualIdentities.query({})) {
+        const x = want.get(c.name);
+        if (!x) continue;
+        const tabs = await browser.tabs.query({ cookieStoreId: c.cookieStoreId });
+        const tab = tabs.find((t) => t.windowId != null);
+        if (!tab) continue;
+        const acc = { windowId: tab.windowId, tabId: tab.id, cookieStoreId: c.cookieStoreId, hidden: !!x.hidden, awake: x.awake !== false, rec: !!x.rec, private: !!x.private, closing: false };
+        accounts.set(x.id, acc);
+        byTab.set(tab.id, x.id);
+        byStore.set(c.cookieStoreId, x.id);
+        // the open page lost its link to the extension: it gets it again
+        // (page.js stays in the page from before)
+        await browser.tabs.executeScript(tab.id, { file: 'content.js', allFrames: true, matchAboutBlank: true }).catch(() => {});
+        pushState(acc);
+      }
+      break;
+    }
     case 'close':
       if (a) await closeAccount(m.id, a);
       break;

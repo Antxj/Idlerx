@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Idlerx",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Connects the Idlerx app to its Firefox: one container and one window per account.",
   "browser_specific_settings": {
     "gecko": {
