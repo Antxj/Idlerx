@@ -100,8 +100,8 @@ pub struct Page {
 
 impl Page {
     /// The page got the mouse or keyboard: the user's, unless a macro just
-    /// sent input to it.
-    fn focused(&self) {
+    /// sent input to it. True when it was the user's.
+    fn focused(&self) -> bool {
         let by_macro = self
             .macro_input
             .get()
@@ -109,6 +109,7 @@ impl Page {
         if !by_macro {
             self.got_focus.set(true);
         }
+        !by_macro
     }
 }
 
@@ -576,7 +577,14 @@ impl Engine {
                     .is_some_and(|pw| pw.visible() && w.within(pw))
             });
             if let Some(p) = page {
-                p.focused();
+                if p.focused() {
+                    // the accounts of a network share one Firefox, which
+                    // types in the window it holds active: Windows does not
+                    // tell it of a click in an embedded window, Idlerx does
+                    if let Some(pw) = p.window.get() {
+                        pw.activate();
+                    }
+                }
             }
         }
         while let Ok(msg) = self.rx.try_recv() {

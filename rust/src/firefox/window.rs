@@ -176,6 +176,12 @@ impl Window {
         true
     }
 
+    /// Makes the window the one its Firefox holds active (where it types).
+    pub fn activate(self) {
+        self.post(wm::WM_ACTIVATE, 1, 0);
+        self.post(wm::WM_SETFOCUS, 0, 0);
+    }
+
     /// Presses and releases a key (virtual key code, and its text if it
     /// types something).
     pub fn key(self, vk: u16, text: Option<&str>) {
