@@ -71,6 +71,10 @@ struct DragAccount(String);
 struct DragGroup(String);
 
 enum Action {
+    /// "Block element": the user points at an ad of the account's page.
+    PickElement(String),
+    /// Blocking off (or on again) on the site of the account's page.
+    ToggleBlockSite(String),
     Select(String),
     Open(String),
     Pause(String),
@@ -144,6 +148,7 @@ struct GroupEdit {
     assign: Option<String>,
     vpn: network::VpnEdit,
     in_private: bool,
+    color: Option<u8>,
     error: Option<String>,
 }
 
@@ -270,7 +275,7 @@ impl App {
         let repaint = ctx.clone();
         let tray = tray::Tray::new(move || repaint.request_repaint());
         // ad blocker: lists loaded and refreshed in the background
-        crate::blocker::configure(cfg.block_ads, &cfg.block_allow);
+        crate::blocker::configure(cfg.block_ads, &cfg.block_allow, &cfg.block_rules);
         let repaint = ctx.clone();
         crate::blocker::start(move || repaint.request_repaint());
         let screenshot = std::env::var("IDLERX_SCREENSHOT")
@@ -300,6 +305,7 @@ impl App {
                     assign: None,
                     vpn: network::VpnEdit::of(Some(g)),
                     in_private: g.in_private,
+                    color: g.color,
                     error: None,
                 })
             }),
@@ -454,6 +460,12 @@ impl App {
             ctx.request_repaint();
         }
 
+        // the ad blocker's lists load first (a few seconds after the app
+        // starts): a page opened before would see no blocking at all
+        if crate::blocker::warming_up() && self.created.elapsed() < Duration::from_secs(15) {
+            ctx.request_repaint_after(Duration::from_millis(200));
+            return;
+        }
         // the first account that can open now: accounts of a group with a
         // VPN wait for it, without holding the others back
         let now = Instant::now();
@@ -538,6 +550,51 @@ impl App {
                 }
                 self.mark_dirty();
             }
+            Action::PickElement(id) => {
+                if let Some(p) = self.panels.get(&id) {
+                    p.pick_element();
+                }
+            }
+            Action::ToggleBlockSite(id) => {
+                let Some(url) = self.panels.get(&id).and_then(|p| p.url()) else {
+                    return;
+                };
+                let host = config::host_of(&url).to_ascii_lowercase();
+                if host.is_empty() {
+                    return;
+                }
+                let on = crate::blocker::site_allowed(&url);
+                if on {
+                    // allowed by this host or a parent domain: all such
+                    // entries go
+                    self.cfg.block_allow.retain(|a| {
+                        let a = a.trim().trim_start_matches("*.").to_ascii_lowercase();
+                        !(host == a || host.ends_with(&format!(".{a}")))
+                    });
+                } else {
+                    self.cfg.block_allow.push(host.clone());
+                }
+                crate::blocker::configure(
+                    self.cfg.block_ads,
+                    &self.cfg.block_allow,
+                    &self.cfg.block_rules,
+                );
+                for p in self.panels.values() {
+                    p.forget_scriptlets();
+                }
+                if let Some(p) = self.panels.get(&id) {
+                    p.reload();
+                }
+                self.note(
+                    &id,
+                    &if on {
+                        format!("bloqueio de anúncios ligado de novo em {host}")
+                    } else {
+                        format!("bloqueio de anúncios desligado em {host}")
+                    },
+                );
+                self.mark_dirty();
+            }
             Action::Reload(id) => {
                 if let Some(p) = self.panels.get(&id) {
                     p.reload();
@@ -615,6 +672,7 @@ impl App {
                     assign,
                     vpn: network::VpnEdit::default(),
                     in_private: false,
+                    color: None,
                     error: None,
                 }))
             }
@@ -626,6 +684,7 @@ impl App {
                         assign: None,
                         vpn: network::VpnEdit::of(Some(g)),
                         in_private: g.in_private,
+                        color: g.color,
                         error: None,
                     }));
                 }
@@ -761,7 +820,11 @@ impl App {
         let mut hotkeys = Vec::new();
         let mut failures = Vec::new();
         let mut loads = Vec::new();
+        let mut picks = Vec::new();
         for (id, p) in &self.panels {
+            if let Some(pick) = p.take_picked() {
+                picks.push((id.clone(), pick));
+            }
             if p.take_got_focus() {
                 focused = Some(id.clone());
             }
@@ -774,6 +837,22 @@ impl App {
             if p.take_loaded() {
                 loads.push((id.clone(), p.url().unwrap_or_default()));
             }
+        }
+        // "Block element": the element is gone from that site for good
+        for (id, (url, selector)) in picks {
+            let Some(rule) = crate::blocker::element_rule(&url, &selector) else {
+                continue;
+            };
+            if !self.cfg.block_rules.contains(&rule) {
+                self.cfg.block_rules.push(rule.clone());
+                crate::blocker::configure(
+                    self.cfg.block_ads,
+                    &self.cfg.block_allow,
+                    &self.cfg.block_rules,
+                );
+                self.mark_dirty();
+            }
+            self.note(&id, &format!("elemento escondido: {rule}"));
         }
         for (id, url) in loads {
             self.note(&id, &format!("documento carregando: {url}"));
@@ -790,6 +869,7 @@ impl App {
             match k {
                 Hotkey::Focus => self.focus_mode = !self.focus_mode,
                 Hotkey::Escape => self.focus_mode = false,
+                Hotkey::Account(n) => self.show_nth(n),
             }
             ctx.request_repaint();
         }
@@ -914,6 +994,48 @@ impl App {
         if new && self.dialog.is_none() {
             self.apply(Action::NewAccount(None));
         }
+        let digit = ctx.input(|i| {
+            const KEYS: [Key; 9] = [
+                Key::Num1,
+                Key::Num2,
+                Key::Num3,
+                Key::Num4,
+                Key::Num5,
+                Key::Num6,
+                Key::Num7,
+                Key::Num8,
+                Key::Num9,
+            ];
+            if !i.modifiers.command || i.modifiers.shift || i.modifiers.alt {
+                return None;
+            }
+            KEYS.iter()
+                .position(|k| i.key_pressed(*k))
+                .map(|p| p as u8 + 1)
+        });
+        if let (Some(n), None) = (digit, &self.dialog) {
+            self.show_nth(n);
+        }
+    }
+
+    /// Ctrl+1…9: shows the account at that place of the list (opening it
+    /// if it was paused).
+    fn show_nth(&mut self, n: u8) {
+        let Some(id) = self.cfg.display_order().get(n as usize - 1).cloned() else {
+            return;
+        };
+        if !self.is_open_or_opening(&id) {
+            self.request_open(&id);
+        }
+        let in_grid = self.cfg.layout == Layout::Grid
+            && self
+                .cfg
+                .grid_accounts(|i| self.is_open_or_opening(i))
+                .contains(&id);
+        if !in_grid {
+            self.cfg.layout = Layout::Tabs;
+        }
+        self.apply(Action::Select(id));
     }
 
     fn register_window(&mut self, frame: &eframe::Frame) {

@@ -58,8 +58,10 @@ computer. Idlerx sorts it out:
   and rows). Drag an account from the list onto a grid cell.
 - **Groups**: sort accounts by game, server or anything you like. Click a
   group to see only its accounts in the grid; open or pause a whole group
-  at once; drag accounts and groups to rearrange them.
+  at once; drag accounts and groups to rearrange them. Give a group a
+  color and its accounts carry it in the list and in the grid.
 - **Focus mode** (F11): just the game, no list or bar.
+- **Ctrl+1…9**: jumps to that account of the list.
 - **Sound and zoom per account**, address bar, favorites, rename, drag to
   reorder.
 - **Saved passwords per account**, encrypted by Windows, never synced
@@ -127,6 +129,15 @@ Built in and **on by default for every account**, InPrivate included.
   EasyList, EasyPrivacy and Peter Lowe's list.
 - **Blocks** ad scripts, trackers and malware, and **hides the spots** where
   ads would be.
+- **uBlock Origin's scripts and stand-ins**: the rules that run a small
+  script in the page (against pop-unders, ad timers and "turn off your
+  blocker" checks) work as in uBlock Origin, and an ad library a game
+  needs gets a harmless stand-in instead of breaking the game.
+- **Block element**: an ad got through? The account's 🛡 button ›
+  **Block element**, point at it and click: it is gone from that site for
+  good (Settings › **Hidden elements** brings it back).
+- **Per account**: the 🛡 button shows how much was blocked there and
+  turns blocking off (or on again) for that site with one click.
 - **No pop-ups**: ad windows, and any window a site tries to open on its
   own, without a click, are not opened. Windows you open by clicking (a
   login, a link) work normally.

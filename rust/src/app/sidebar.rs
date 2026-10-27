@@ -184,6 +184,15 @@ impl App {
         });
     }
 
+    /// The account has a macro line (recording, or a macro running): its
+    /// row gets a third line, for the CPU and memory.
+    fn macro_line(&self, id: &str) -> bool {
+        self.panels.contains_key(id)
+            && (self.recording_on(id) || self.macro_next_in(id).is_some() || self.macro_running(id))
+    }
+
+    /// Second line of an account's row; CPU and memory are left out when
+    /// they get a line of their own (`macro_line`).
     pub(super) fn status_text(&self, id: &str) -> (String, Color32, bool) {
         if let Some(p) = self.panels.get(id) {
             let mut s = metrics::fmt_duration(p.started.elapsed());
@@ -202,7 +211,7 @@ impl App {
             } else if self.macro_running(id) {
                 s = format!("⟲ macro · {s}");
             }
-            if let Some(u) = self.metrics.get(id) {
+            if let Some(u) = self.metrics.get(id).filter(|_| !self.macro_line(id)) {
                 s.push_str(" · ");
                 s.push_str(&usage_text(u));
             }
@@ -225,8 +234,15 @@ impl App {
     ) {
         let dark = ui.visuals().dark_mode;
         let selected = self.cfg.selected.as_deref() == Some(a.id.as_str());
+        // a macro's line pushes CPU and memory to a third one
+        let third = self
+            .metrics
+            .get(&a.id)
+            .filter(|_| self.macro_line(&a.id))
+            .map(usage_text);
+        let height = ROW_HEIGHT + if third.is_some() { 16.0 } else { 0.0 };
         let (full, resp) = ui.allocate_exact_size(
-            Vec2::new(ui.available_width(), ROW_HEIGHT),
+            Vec2::new(ui.available_width(), height),
             Sense::click_and_drag(),
         );
         let rect = Rect::from_min_max(full.min + Vec2::new(indent, 0.0), full.max);
@@ -247,6 +263,22 @@ impl App {
         }
 
         let painter = ui.painter_at(rect);
+        // the color of the account's group, a stripe on the left
+        if let Some(c) = self
+            .cfg
+            .group_of(a)
+            .and_then(|g| self.cfg.group(g))
+            .and_then(|g| g.color)
+        {
+            ui.painter().rect_filled(
+                Rect::from_min_size(
+                    Pos2::new(full.left(), full.top() + 8.0),
+                    Vec2::new(3.0, full.height() - 16.0),
+                ),
+                CornerRadius::same(2),
+                group_color(c),
+            );
+        }
         let bg = if selected {
             ACCENT.gamma_multiply(if dark { 0.22 } else { 0.16 })
         } else if resp.hovered() {
@@ -279,7 +311,7 @@ impl App {
         }
 
         let (status, dot, open) = self.status_text(&a.id);
-        let center = Pos2::new(rect.left() + 24.0, rect.center().y);
+        let center = Pos2::new(rect.left() + 24.0, rect.top() + ROW_HEIGHT / 2.0);
         avatar(&painter, center, 17.0, a, open);
         if open {
             painter.circle(
@@ -318,6 +350,16 @@ impl App {
             weak(dark),
             second_w,
         );
+        if let Some(usage) = &third {
+            single_line(
+                &painter,
+                Pos2::new(text_left, rect.top() + 45.0),
+                usage,
+                FontId::proportional(11.0),
+                weak(dark),
+                second_w,
+            );
+        }
 
         // icons on the right: favorite and sound
         let mut x = rect.right() - 14.0;
@@ -654,6 +696,17 @@ impl App {
             );
         }
 
+        // the group's color, a stripe on the left
+        if let Some(c) = g.color {
+            painter.rect_filled(
+                Rect::from_min_size(
+                    rect.min + Vec2::new(0.0, 6.0),
+                    Vec2::new(3.0, rect.height() - 12.0),
+                ),
+                CornerRadius::same(2),
+                group_color(c),
+            );
+        }
         // expand/collapse triangle
         let c = Pos2::new(rect.left() + 12.0, rect.top() + GROUP_HEIGHT / 2.0);
         let tri = if g.collapsed {

@@ -58,8 +58,10 @@ resolve isso:
   linhas quiser). Arraste uma conta da lista para um quadro da grade.
 - **Grupos**: separe as contas por jogo, servidor ou o que preferir. Clique
   num grupo para ver só as contas dele na grade; abra ou pause o grupo
-  inteiro de uma vez; arraste contas e grupos para reorganizar.
+  inteiro de uma vez; arraste contas e grupos para reorganizar. Dê uma cor
+  ao grupo e as contas dele a levam na lista e na grade.
 - **Modo foco** (F11): só o jogo, sem lista nem barra.
+- **Ctrl+1…9**: vai direto para aquela conta da lista.
 - **Som e zoom por conta**, barra de endereço, favoritos, renomear,
   reordenar arrastando.
 - **Senhas salvas por conta**, criptografadas pelo Windows, sem
@@ -127,6 +129,16 @@ Embutido e **ligado por padrão em todas as contas**, inclusive InPrivate.
   EasyList, EasyPrivacy e a lista de Peter Lowe.
 - **Bloqueia** scripts de anúncio, rastreadores e malware, e **esconde os
   espaços** onde os anúncios ficariam.
+- **Scripts e substitutos do uBlock Origin**: as regras que rodam um
+  pequeno script na página (contra pop-unders, timers de anúncio e avisos
+  de "desligue seu bloqueador") funcionam como no uBlock Origin, e uma
+  biblioteca de anúncio de que um jogo precisa recebe um substituto
+  inofensivo em vez de quebrar o jogo.
+- **Bloquear elemento**: passou um anúncio? Botão 🛡 da conta ›
+  **Bloquear elemento**, aponte e clique: ele some daquele site para
+  sempre (Configurações › **Elementos escondidos** traz de volta).
+- **Por conta**: o botão 🛡 mostra quanto foi bloqueado ali e desliga (ou
+  religa) o bloqueio daquele site com um clique.
 - **Sem pop-ups**: janelas de propaganda, e qualquer janela que um site
   tente abrir sozinho, sem um clique, não abrem. As janelas que você abre
   clicando (um login, um link) funcionam normalmente.

@@ -153,6 +153,31 @@ impl App {
                     if !r.has_focus() && st.name.is_empty() {
                         r.request_focus();
                     }
+                    ui.add_space(8.0);
+                    // a color that marks the group and its accounts
+                    ui.horizontal(|ui| {
+                        ui.label(tr!("Cor:", "Color:"));
+                        let none = ui
+                            .selectable_label(st.color.is_none(), tr!("nenhuma", "none"));
+                        if none.clicked() {
+                            st.color = None;
+                        }
+                        for i in 0..GROUP_COLORS.len() as u8 {
+                            let (r, resp) =
+                                ui.allocate_exact_size(Vec2::splat(18.0), Sense::click());
+                            ui.painter().circle_filled(r.center(), 7.0, group_color(i));
+                            if st.color == Some(i) {
+                                ui.painter().circle_stroke(
+                                    r.center(),
+                                    9.0,
+                                    Stroke::new(1.5, ui.visuals().strong_text_color()),
+                                );
+                            }
+                            if resp.clicked() {
+                                st.color = Some(i);
+                            }
+                        }
+                    });
                     ui.add_space(10.0);
                     ui.checkbox(
                         &mut st.in_private,
@@ -219,6 +244,9 @@ impl App {
                             gid
                         }
                     };
+                    if let Some(g) = self.cfg.group_mut(&gid) {
+                        g.color = st.color;
+                    }
                     // InPrivate changed: the group's open accounts start over
                     let was_private = self.cfg.group(&gid).is_some_and(|g| g.in_private);
                     if was_private != st.in_private {
@@ -804,8 +832,15 @@ impl App {
             close
         });
 
-        if self.cfg.block_ads != before.block_ads || self.cfg.block_allow != before.block_allow {
-            crate::blocker::configure(self.cfg.block_ads, &self.cfg.block_allow);
+        if self.cfg.block_ads != before.block_ads
+            || self.cfg.block_allow != before.block_allow
+            || self.cfg.block_rules != before.block_rules
+        {
+            crate::blocker::configure(
+                self.cfg.block_ads,
+                &self.cfg.block_allow,
+                &self.cfg.block_rules,
+            );
         }
         if self.cfg.language != before.language {
             i18n::apply(
@@ -986,6 +1021,36 @@ impl App {
                     .changed()
                 {
                     self.cfg.block_allow = text.split('\n').map(String::from).collect();
+                }
+            });
+        egui::CollapsingHeader::new(tr!("Elementos escondidos", "Hidden elements"))
+            .id_salt("block_rules")
+            .show(ui, |ui| {
+                ui.label(
+                    RichText::new(tr!(
+                        "Os que você escondeu com \"Bloquear elemento\" (botão 🛡 da conta), um por \
+                         linha: site##seletor. Apague uma linha para o elemento voltar.",
+                        "The ones you hid with \"Block element\" (an account's 🛡 button), one per \
+                         line: site##selector. Delete a line to bring the element back."
+                    ))
+                    .small()
+                    .color(weak(dark)),
+                );
+                let mut text = self.cfg.block_rules.join("\n");
+                if ui
+                    .add(
+                        egui::TextEdit::multiline(&mut text)
+                            .code_editor()
+                            .desired_rows(3)
+                            .desired_width(f32::INFINITY),
+                    )
+                    .changed()
+                {
+                    self.cfg.block_rules = text
+                        .split('\n')
+                        .map(|l| l.trim().to_string())
+                        .filter(|l| !l.is_empty())
+                        .collect();
                 }
             });
     }

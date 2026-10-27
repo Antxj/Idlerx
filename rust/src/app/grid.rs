@@ -248,10 +248,19 @@ impl App {
                 actions.push(Action::MoveTo(p.0.clone(), id.clone()));
             }
 
+            let color = self
+                .cfg
+                .group_of(&a)
+                .and_then(|g| self.cfg.group(g))
+                .and_then(|g| g.color)
+                .map(group_color);
             let stroke = if hovering {
                 Stroke::new(2.0, ACCENT)
             } else if selected && ids.len() > 1 {
                 Stroke::new(1.5, ACCENT)
+            } else if let Some(c) = color {
+                // the group's color marks its accounts in the grid
+                Stroke::new(1.5, c.gamma_multiply(0.8))
             } else {
                 Stroke::new(1.0, border(dark))
             };
@@ -301,13 +310,10 @@ impl App {
             self.panels.contains_key(&a.id),
         );
 
+        // time and frames (CPU and memory are in the side list)
         let mut usage = String::new();
-        if let (Some(p), Some(u)) = (self.panels.get(&a.id), self.metrics.get(&a.id)) {
-            usage = format!(
-                "{} · {}",
-                metrics::fmt_duration(p.started.elapsed()),
-                usage_text(u)
-            );
+        if let Some(p) = self.panels.get(&a.id) {
+            usage = metrics::fmt_duration(p.started.elapsed());
             // frames actually drawn, measured inside the page (and the limit)
             let selected = self.cfg.selected.as_deref() == Some(a.id.as_str());
             let limit = self.cfg.fps_for(a, selected);
@@ -349,11 +355,25 @@ impl App {
         if button(mute, mute_hint) {
             actions.push(Action::ToggleMute(a.id.clone()));
         }
+        if let Some(p) = self.panels.get(&a.id).filter(|_| self.cfg.block_ads) {
+            let r = Rect::from_min_size(
+                Pos2::new(x - 24.0, rect.top() + 2.0),
+                Vec2::new(24.0, rect.height() - 4.0),
+            );
+            x -= 26.0;
+            let resp = ui
+                .place(r, egui::Button::new("🛡").frame(false))
+                .bar_tip(tr!("Bloqueio de anúncios", "Ad blocking"));
+            let (blocked, url) = (p.blocked(), p.url());
+            egui::Popup::menu(&resp).show(|ui| {
+                blocker_menu(ui, &a.id, blocked, url.as_deref(), actions);
+            });
+        }
 
-        let usage_w = if usage.is_empty() || rect.width() < 420.0 {
+        let usage_w = if usage.is_empty() || rect.width() < 360.0 {
             0.0
         } else {
-            230.0
+            120.0
         };
         if usage_w > 0.0 {
             painter.text(

@@ -94,6 +94,17 @@ impl App {
         if self.screenshot.as_deref() == Some("record-test") {
             self.record_test();
         }
+        // IDLERX_SCREENSHOT=pick-test (tests): "Block element" starts in each
+        // account 8 s after it opened (the test page plays the user's part)
+        if self.screenshot.as_deref() == Some("pick-test") {
+            for (id, p) in &self.panels {
+                if p.started.elapsed() > Duration::from_secs(8)
+                    && self.macro_started_once.insert(format!("pick:{id}"))
+                {
+                    p.pick_element();
+                }
+            }
+        }
         // IDLERX_SCREENSHOT=load:<address> (tests): every account goes there
         // once its page is open
         if let Some(url) = self

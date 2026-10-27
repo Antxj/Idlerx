@@ -121,6 +121,16 @@ impl App {
                 // sound and zoom of the selected account
                 if let Some(a) = &account {
                     let id = a.id.clone();
+                    if let Some(p) = self.panels.get(&id).filter(|_| self.cfg.block_ads) {
+                        let resp = ui.add(egui::Button::new("🛡").frame(false)).bar_tip(tr!(
+                            "Bloqueio de anúncios desta conta",
+                            "Ad blocking of this account"
+                        ));
+                        let (blocked, url) = (p.blocked(), p.url());
+                        egui::Popup::menu(&resp).show(|ui| {
+                            blocker_menu(ui, &id, blocked, url.as_deref(), actions);
+                        });
+                    }
                     let icon = if a.muted { "🔇" } else { "🔊" };
                     let hint = if a.muted {
                         tr!("Ativar som desta conta", "Unmute this account")

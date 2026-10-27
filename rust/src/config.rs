@@ -147,6 +147,9 @@ pub struct Group {
     pub vpn: Option<GroupVpn>,
     /// Every account of the group is InPrivate (see `Account::in_private`).
     pub in_private: bool,
+    /// Color that marks the group and its accounts (index of the palette,
+    /// see `app::widgets::group_color`); None = no color.
+    pub color: Option<u8>,
 }
 
 impl Group {
@@ -260,6 +263,9 @@ pub struct Config {
     pub block_ads: bool,
     /// Sites where nothing is blocked (one host per entry).
     pub block_allow: Vec<String>,
+    /// Elements the user hid ("Block element"), as rules of the lists:
+    /// `site##selector`.
+    pub block_rules: Vec<String>,
     /// The "still running in the tray" notice was shown once.
     pub tray_hint_shown: bool,
     /// Profile folders still to be deleted (they were in use).
@@ -290,6 +296,7 @@ impl Default for Config {
             close_to_tray: true,
             block_ads: true,
             block_allow: Vec::new(),
+            block_rules: Vec::new(),
             tray_hint_shown: false,
             pending_delete: Vec::new(),
         }
@@ -765,6 +772,7 @@ mod tests {
             collapsed: false,
             vpn: None,
             in_private: false,
+            color: None,
         });
     }
 

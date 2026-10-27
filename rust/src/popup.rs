@@ -195,7 +195,13 @@ unsafe fn setup(
     }));
     webview.add_DocumentTitleChanged(&title, &mut token)?;
     // the blocker inside it too, and the windows it opens
-    crate::panels::watch_requests(webview, env, account);
+    crate::panels::watch_requests(
+        webview,
+        env,
+        account,
+        &std::rc::Rc::default(),
+        &std::rc::Rc::default(),
+    );
     Ok(())
 }
 

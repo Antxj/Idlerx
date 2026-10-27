@@ -30,8 +30,8 @@ use webview2_com::{
 };
 use webview2_com::{
     CallDevToolsProtocolMethodCompletedHandler, CapturePreviewCompletedHandler,
-    DOMContentLoadedEventHandler, NewWindowRequestedEventHandler, WebMessageReceivedEventHandler,
-    WebResourceRequestedEventHandler,
+    DOMContentLoadedEventHandler, NavigationStartingEventHandler, NewWindowRequestedEventHandler,
+    WebMessageReceivedEventHandler, WebResourceRequestedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, RECT};
 use windows_core::{Interface, BOOL, HSTRING, PCWSTR, PWSTR};
@@ -79,6 +79,13 @@ fn vpn_args(port: u16) -> String {
 
 /// Limits how often the pages draw (see the file).
 const FPS_SCRIPT: &str = include_str!("fps.js");
+/// "Block element" (see the file).
+const PICKER_SCRIPT: &str = include_str!("picker.js");
+
+/// The ad blocker's scripts registered in a page, by site (see
+/// `watch_requests`): the id WebView2 gave each one (empty while it is
+/// being added).
+pub(crate) type Scriptlets = Rc<RefCell<HashMap<String, String>>>;
 
 /// Keys pressed inside a page that belong to the app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -87,6 +94,17 @@ pub enum Hotkey {
     Focus,
     /// Esc: leaves focus mode (the page still gets it).
     Escape,
+    /// Ctrl+1…9: shows the account at that place of the list.
+    Account(u8),
+}
+
+/// A modifier key (VK_CONTROL, VK_SHIFT, VK_MENU) is down.
+fn key_down(vk: i32) -> bool {
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetKeyState(vk: i32) -> i16;
+    }
+    unsafe { GetKeyState(vk) < 0 }
 }
 
 /// A process of the page failed (see [`Panel::take_failure`]).
@@ -264,6 +282,11 @@ pub struct Panel {
     /// Recording a macro: what the page reported so far.
     recording: Rc<Cell<bool>>,
     recorded: Rc<RefCell<Vec<serde_json::Value>>>,
+    /// Requests and windows the ad blocker stopped in this account.
+    blocked: Rc<Cell<u64>>,
+    scriptlets: Scriptlets,
+    /// An element the user picked to hide: (page address, selector).
+    picked: Rc<RefCell<Option<(String, String)>>>,
 }
 
 impl Drop for Panel {
@@ -329,6 +352,15 @@ impl Panel {
                     } else if down && vk == VK_ESCAPE {
                         k.set(Some(Hotkey::Escape));
                         wake_keys();
+                    } else if down
+                        && (0x31..=0x39).contains(&vk)
+                        && key_down(0x11)
+                        && !key_down(0x10)
+                        && !key_down(0x12)
+                    {
+                        k.set(Some(Hotkey::Account((vk - 0x30) as u8)));
+                        args.SetHandled(true)?;
+                        wake_keys();
                     }
                     Ok(())
                 }));
@@ -355,10 +387,12 @@ impl Panel {
             let failure = Rc::new(Cell::new(None));
             let fl = failure.clone();
             let w = wake.clone();
+            let name = account.name.clone();
             let failed = ProcessFailedEventHandler::create(Box::new(move |_, args| {
                 let Some(args) = args else { return Ok(()) };
                 let mut kind = Default::default();
                 args.ProcessFailedKind(&mut kind)?;
+                crate::events::log(&name, &failure_text(&args, kind));
                 let f = match kind {
                     COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED => {
                         Some(Failure::BrowserGone)
@@ -386,29 +420,36 @@ impl Panel {
             // macro recording: the page reports the user's clicks and keys
             let recording = Rc::new(Cell::new(false));
             let recorded = Rc::new(RefCell::new(Vec::new()));
-            let (on, list) = (recording.clone(), recorded.clone());
+            let picked = Rc::new(RefCell::new(None));
+            let (on, list, pick) = (recording.clone(), recorded.clone(), picked.clone());
             let w = wake.clone();
             let messages = WebMessageReceivedEventHandler::create(Box::new(move |_, args| {
                 let Some(args) = args else { return Ok(()) };
-                if !on.get() {
-                    return Ok(());
-                }
                 let mut json = PWSTR::null();
                 args.WebMessageAsJson(&mut json)?;
                 let text = take_pwstr(json);
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if v["__idlerxRec"].is_object() {
-                        list.borrow_mut().push(v["__idlerxRec"].clone());
-                        w();
-                    }
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+                    return Ok(());
+                };
+                if on.get() && v["__idlerxRec"].is_object() {
+                    list.borrow_mut().push(v["__idlerxRec"].clone());
+                    w();
+                }
+                // "Block element": the element the user chose
+                let p = &v["__idlerxPick"];
+                if let (Some(url), Some(sel)) = (p["url"].as_str(), p["selector"].as_str()) {
+                    *pick.borrow_mut() = Some((url.to_string(), sel.to_string()));
+                    w();
                 }
                 Ok(())
             }));
             let _ = webview.add_WebMessageReceived(&messages, &mut token);
             // ad blocker (see `blocker`): every request of the page, iframes
             // included, is checked; the blocked ones get an empty answer
+            let blocked = Rc::new(Cell::new(0));
+            let scriptlets: Scriptlets = Rc::default();
             if crate::blocker::enabled() {
-                watch_requests(&webview, env, &account.name);
+                watch_requests(&webview, env, &account.name, &blocked, &scriptlets);
             }
             let _ = controller.add_GotFocus(&focus_handler, &mut token);
             let _ = controller.add_AcceleratorKeyPressed(&key_handler, &mut token);
@@ -432,6 +473,9 @@ impl Panel {
                 loaded,
                 recording,
                 recorded,
+                blocked,
+                scriptlets,
+                picked,
             };
             p.set_save_passwords(save_passwords);
             p.set_muted(account.muted);
@@ -673,6 +717,36 @@ impl Panel {
         evaluate(&self.webview, &js, |_| {});
     }
 
+    /// Requests and windows the ad blocker stopped in this account.
+    pub fn blocked(&self) -> u64 {
+        self.blocked.get()
+    }
+
+    /// "Block element": the user points at an ad in the page to hide it
+    /// (again: cancels).
+    pub fn pick_element(&self) {
+        evaluate(&self.webview, PICKER_SCRIPT, |_| {});
+    }
+
+    /// The element the user chose to hide since the last call: (page
+    /// address, CSS selector).
+    pub fn take_picked(&self) -> Option<(String, String)> {
+        self.picked.borrow_mut().take()
+    }
+
+    /// The ad blocker's settings changed: its scripts are worked out again
+    /// on the next pages.
+    pub fn forget_scriptlets(&self) {
+        for (_, id) in self.scriptlets.borrow_mut().drain() {
+            if !id.is_empty() {
+                let _ = unsafe {
+                    self.webview
+                        .RemoveScriptToExecuteOnDocumentCreated(&HSTRING::from(id))
+                };
+            }
+        }
+    }
+
     /// Events reported since the last call, while recording.
     pub fn take_recorded(&self) -> Vec<serde_json::Value> {
         std::mem::take(&mut self.recorded.borrow_mut())
@@ -912,12 +986,73 @@ pub(crate) unsafe fn watch_requests(
     webview: &ICoreWebView2,
     env: &ICoreWebView2Environment,
     name: &str,
+    blocked: &Rc<Cell<u64>>,
+    scriptlets: &Scriptlets,
 ) {
     let mut token = Default::default();
+    // the lists' scripts (uBlock's `+js` rules), before the page's own: each
+    // site's are added when a page or frame of it starts loading, and run
+    // only on that site. WebView2 runs an added script from the next
+    // document on, so the first page of a site is held back until its
+    // scripts are in, then loaded again (frames get them from their next
+    // load).
+    for top in [true, false] {
+        let known = scriptlets.clone();
+        let starting = NavigationStartingEventHandler::create(Box::new(move |sender, args| {
+            let (Some(sender), Some(args)) = (sender, args) else {
+                return Ok(());
+            };
+            let mut uri = PWSTR::null();
+            args.Uri(&mut uri)?;
+            let uri = take_pwstr(uri);
+            let host = crate::blocker::hostname(&uri);
+            // (lists still loading: looked at again on the next page)
+            if host.is_empty() || known.borrow().contains_key(&host) || !crate::blocker::ready() {
+                return Ok(());
+            }
+            known.borrow_mut().insert(host.clone(), String::new());
+            let Some(script) = crate::blocker::scriptlets_for(&uri) else {
+                return Ok(());
+            };
+            // uBlock's scriptlets expect `scriptletGlobals` from the code
+            // that injects them
+            let js = format!(
+                "(() => {{ if (location.hostname.toLowerCase() !== {}) return;\nconst scriptletGlobals = {{}};\n{script}\n}})();",
+                serde_json::Value::String(host.clone())
+            );
+            if top {
+                args.SetCancel(true)?;
+            }
+            let (k, page) = (known.clone(), sender.clone());
+            let _ = sender.AddScriptToExecuteOnDocumentCreated(
+                &HSTRING::from(js),
+                &AddScriptToExecuteOnDocumentCreatedCompletedHandler::create(Box::new(
+                    move |res, id| {
+                        if res.is_ok() {
+                            if let Some(v) = k.borrow_mut().get_mut(&host) {
+                                *v = id;
+                            }
+                        }
+                        if top {
+                            let _ = page.Navigate(&HSTRING::from(uri.as_str()));
+                        }
+                        Ok(())
+                    },
+                )),
+            );
+            Ok(())
+        }));
+        if top {
+            let _ = webview.add_NavigationStarting(&starting, &mut token);
+        } else {
+            let _ = webview.add_FrameNavigationStarting(&starting, &mut token);
+        }
+    }
     // pop-ups: the engine has no `$popup` rules, so each new window is
     // checked here; a blocked one is simply not opened
     let account = name.to_string();
     let popup_env = env.clone();
+    let popup_count = blocked.clone();
     let popups = NewWindowRequestedEventHandler::create(Box::new(move |sender, args| {
         let (Some(sender), Some(args)) = (sender, args) else {
             return Ok(());
@@ -932,6 +1067,7 @@ pub(crate) unsafe fn watch_requests(
         let source = take_pwstr(source);
         if crate::blocker::popup_blocked(&uri, &source, user.as_bool()) {
             args.SetHandled(true)?;
+            popup_count.set(popup_count.get() + 1);
             let shown: String = uri.chars().take(150).collect();
             crate::events::log(
                 &account,
@@ -959,6 +1095,7 @@ pub(crate) unsafe fn watch_requests(
         );
     }
     let env = env.clone();
+    let count = blocked.clone();
     let handler = WebResourceRequestedEventHandler::create(Box::new(move |sender, args| {
         let (Some(sender), Some(args)) = (sender, args) else {
             return Ok(());
@@ -989,7 +1126,29 @@ pub(crate) unsafe fn watch_requests(
             COREWEBVIEW2_WEB_RESOURCE_CONTEXT_PING => Kind::Ping,
             _ => Kind::Other,
         };
-        if crate::blocker::check(&uri, &source, kind) {
+        use crate::blocker::Verdict;
+        let verdict = crate::blocker::check(&uri, &source, kind);
+        if verdict != Verdict::Allow {
+            count.set(count.get() + 1);
+        }
+        // a stand-in the page can use (an ad library that does nothing),
+        // or else an empty answer
+        let stand_in = match &verdict {
+            Verdict::Redirect(data) => crate::blocker::data_url(data),
+            _ => None,
+        };
+        if let Some((mime, body)) = stand_in {
+            use windows::Win32::UI::Shell::SHCreateMemStream;
+            let stream = SHCreateMemStream(Some(&body));
+            let headers = format!("Content-Type: {mime}\r\nAccess-Control-Allow-Origin: *");
+            let response = env.CreateWebResourceResponse(
+                stream.as_ref(),
+                200,
+                &HSTRING::from("OK"),
+                &HSTRING::from(headers),
+            )?;
+            args.SetResponse(&response)?;
+        } else if verdict != Verdict::Allow {
             let empty = env.CreateWebResourceResponse(
                 None,
                 403,
@@ -1039,6 +1198,54 @@ pub(crate) unsafe fn watch_requests(
         Ok(())
     }));
     let _ = w2.add_DOMContentLoaded(&loaded, &mut token);
+}
+
+/// What failed in a page and why, for the pages log.
+unsafe fn failure_text(
+    args: &ICoreWebView2ProcessFailedEventArgs,
+    kind: COREWEBVIEW2_PROCESS_FAILED_KIND,
+) -> String {
+    let what = match kind {
+        COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED => "o navegador da conta fechou",
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED => "o processo da página fechou",
+        COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED => {
+            "o processo de um quadro da página fechou"
+        }
+        COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE => {
+            "a página parou de responder"
+        }
+        COREWEBVIEW2_PROCESS_FAILED_KIND_GPU_PROCESS_EXITED => {
+            "o processo de vídeo fechou (volta sozinho)"
+        }
+        _ => "um processo auxiliar fechou (volta sozinho)",
+    };
+    let Ok(more) = args.cast::<ICoreWebView2ProcessFailedEventArgs2>() else {
+        return what.to_string();
+    };
+    let mut reason = Default::default();
+    let _ = more.Reason(&mut reason);
+    let why = match reason {
+        COREWEBVIEW2_PROCESS_FAILED_REASON_UNRESPONSIVE => "sem resposta",
+        COREWEBVIEW2_PROCESS_FAILED_REASON_TERMINATED => "encerrado por outro programa",
+        COREWEBVIEW2_PROCESS_FAILED_REASON_CRASHED => "travou",
+        COREWEBVIEW2_PROCESS_FAILED_REASON_LAUNCH_FAILED => "não conseguiu abrir",
+        COREWEBVIEW2_PROCESS_FAILED_REASON_OUT_OF_MEMORY => "faltou memória",
+        COREWEBVIEW2_PROCESS_FAILED_REASON_PROFILE_DELETED => "a pasta do perfil foi apagada",
+        _ => "motivo desconhecido",
+    };
+    let mut code = 0;
+    let _ = more.ExitCode(&mut code);
+    let mut desc = PWSTR::null();
+    let _ = more.ProcessDescription(&mut desc);
+    let desc = take_pwstr(desc);
+    let mut text = format!("{what}: {why}");
+    if code != 0 {
+        text.push_str(&format!(" (código {:#x})", code as u32));
+    }
+    if !desc.is_empty() {
+        text.push_str(&format!(" [{desc}]"));
+    }
+    text
 }
 
 /// Page background while it loads (same as the app's panels).

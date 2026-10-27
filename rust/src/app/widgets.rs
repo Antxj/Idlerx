@@ -353,6 +353,72 @@ pub(super) fn centered(ui: &mut egui::Ui, rect: Rect, add: impl FnOnce(&mut egui
     add(&mut child);
 }
 
+/// Colors a group can have (marks it and its accounts).
+pub(super) const GROUP_COLORS: [Color32; 8] = [
+    Color32::from_rgb(0x14, 0xb8, 0xa6),
+    Color32::from_rgb(0x3b, 0x82, 0xf6),
+    Color32::from_rgb(0x8b, 0x5c, 0xf6),
+    Color32::from_rgb(0xec, 0x48, 0x99),
+    Color32::from_rgb(0xef, 0x44, 0x44),
+    Color32::from_rgb(0xf5, 0x9e, 0x0b),
+    Color32::from_rgb(0x84, 0xcc, 0x16),
+    Color32::from_rgb(0x94, 0xa3, 0xb8),
+];
+
+pub(super) fn group_color(i: u8) -> Color32 {
+    GROUP_COLORS[i as usize % GROUP_COLORS.len()]
+}
+
+/// The ad blocker's menu of an account (its 🛡 button): what it blocked
+/// there, "Block element", and blocking on or off for the page's site.
+pub(super) fn blocker_menu(
+    ui: &mut egui::Ui,
+    id: &str,
+    blocked: u64,
+    url: Option<&str>,
+    actions: &mut Vec<Action>,
+) {
+    ui.set_min_width(230.0);
+    let host = url.map(crate::config::host_of).unwrap_or_default();
+    let allowed = url.is_some_and(crate::blocker::site_allowed);
+    ui.label(
+        RichText::new(trf!(
+            "{} bloqueados nesta conta",
+            "{} blocked in this account",
+            blocked
+        ))
+        .small(),
+    );
+    ui.separator();
+    if !allowed
+        && ui
+            .button(tr!("🎯 Bloquear elemento…", "🎯 Block element…"))
+            .on_hover_text(tr!(
+                "Aponte para um anúncio na página e clique: ele some deste site para sempre \
+                 (Configurações › Elementos escondidos desfaz).",
+                "Point at an ad on the page and click: it is gone from this site for good \
+                 (Settings › Hidden elements undoes it)."
+            ))
+            .clicked()
+    {
+        actions.push(Action::PickElement(id.to_string()));
+    }
+    if !host.is_empty() {
+        let label = if allowed {
+            trf!("🛡 Voltar a bloquear em {}", "🛡 Block on {} again", host)
+        } else {
+            trf!(
+                "Liberar {} (não bloquear nada)",
+                "Allow {} (block nothing)",
+                host
+            )
+        };
+        if ui.button(label).clicked() {
+            actions.push(Action::ToggleBlockSite(id.to_string()));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

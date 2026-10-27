@@ -8,12 +8,23 @@
 //! the lists block get an empty answer; the page also gets a style hiding
 //! the spots of the ads (cosmetic filters).
 //!
+//! As in uBlock Origin, the lists can also run small scripts in a page
+//! (`+js(...)` rules: they defuse pop-unders, anti-blocker checks, ad
+//! timers) and answer some blocked requests with a harmless stand-in
+//! (`$redirect`, so a game that loads an ad library keeps working). Both
+//! come from uBlock Origin itself (`assets/ubo-resources.json`, made by
+//! `tools/ubo_resources.mjs`).
+//!
+//! The user's own rules (hidden elements, see `element_rule`) join the
+//! lists.
+//!
 //! The lists are downloaded into the data folder and refreshed once a day
 //! in the background; the engine is rebuilt off the interface thread and
 //! swapped in when ready.
 
 use adblock::lists::{FilterSet, ParseOptions};
 use adblock::request::Request;
+use adblock::resources::{PermissionMask, Resource};
 use adblock::Engine;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -38,6 +49,12 @@ const REFRESH: Duration = Duration::from_secs(24 * 60 * 60);
 /// Look at the clock this often (a computer that slept does not delay it).
 const TICK: Duration = Duration::from_secs(10 * 60);
 const LIST_LIMIT: usize = 16 * 1024 * 1024;
+
+/// uBlock Origin's scriptlets and stand-ins (see the top of the file).
+const UBO_RESOURCES: &str = include_str!("../assets/ubo-resources.json");
+/// What uBlock calls "trusted" scriptlets (they can set cookies, for one):
+/// only uBlock's own lists and the user's rules may use them.
+const TRUSTED: PermissionMask = PermissionMask::from_bits(1);
 
 /// State shown in the settings.
 #[derive(Clone, Debug, Default)]
@@ -128,6 +145,8 @@ struct Shared {
     blocked: AtomicU64,
     /// "Update now" from the settings.
     refresh_now: std::sync::atomic::AtomicBool,
+    /// The user's rules changed: the engine is built again.
+    rebuild: std::sync::atomic::AtomicBool,
 }
 
 static SHARED: OnceLock<Shared> = OnceLock::new();
@@ -135,10 +154,56 @@ static SHARED: OnceLock<Shared> = OnceLock::new();
 /// Blocking on (setting) and the sites where it is off, set by the app.
 static ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 static ALLOW: RwLock<Vec<String>> = RwLock::new(Vec::new());
+/// The user's own rules (`site##selector`), set by the app.
+static RULES: RwLock<Vec<String>> = RwLock::new(Vec::new());
 
-pub fn configure(enabled: bool, allow: &[String]) {
+pub fn configure(enabled: bool, allow: &[String], rules: &[String]) {
     ENABLED.store(enabled, Ordering::Relaxed);
     *ALLOW.write().unwrap_or_else(|e| e.into_inner()) = allow.to_vec();
+    let mut r = RULES.write().unwrap_or_else(|e| e.into_inner());
+    if *r != rules {
+        *r = rules.to_vec();
+        shared().rebuild.store(true, Ordering::Relaxed);
+    }
+}
+
+/// The lists are loaded (blocking works).
+pub fn ready() -> bool {
+    engine().is_some()
+}
+
+/// The lists are on the disk but still loading (the first seconds after
+/// the app starts): pages opened now would see no blocking at all.
+pub fn warming_up() -> bool {
+    enabled() && engine().is_none() && newest_download().is_some()
+}
+
+/// Nothing is blocked on the site of `url` (it is in the allowed list).
+pub fn site_allowed(url: &str) -> bool {
+    allowed(url, &allow_list())
+}
+
+/// Host of an address without its port, in lower case ("https://A.b:8080/x"
+/// -> "a.b"), as pages see it (`location.hostname`) and rules name it.
+pub fn hostname(url: &str) -> String {
+    let h = host(url);
+    let h = match h.rsplit_once(':') {
+        Some((name, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => name,
+        _ => h,
+    };
+    h.to_ascii_lowercase()
+}
+
+/// A rule that hides an element of a site, as the user picked it:
+/// `host##selector`.
+pub fn element_rule(url: &str, selector: &str) -> Option<String> {
+    let host = hostname(url);
+    let selector = selector.trim();
+    (url.starts_with("http")
+        && !host.is_empty()
+        && !selector.is_empty()
+        && !selector.contains(['\n', '\r']))
+    .then(|| format!("{host}##{selector}"))
 }
 
 pub fn enabled() -> bool {
@@ -149,9 +214,32 @@ fn allow_list() -> Vec<String> {
     ALLOW.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
-/// `should_block` with the app's settings.
-pub fn check(url: &str, source: &str, kind: Kind) -> bool {
-    enabled() && should_block(url, source, kind, &allow_list())
+/// What to do with a request.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Verdict {
+    Allow,
+    /// An empty answer.
+    Block,
+    /// A harmless stand-in (a `data:` address with its content).
+    Redirect(String),
+}
+
+/// `verdict` with the app's settings.
+pub fn check(url: &str, source: &str, kind: Kind) -> Verdict {
+    if !enabled() {
+        return Verdict::Allow;
+    }
+    verdict(url, source, kind, &allow_list())
+}
+
+/// The scripts the lists run in pages of `url` (uBlock's `+js(...)`
+/// rules), as one script; None when there are none.
+pub fn scriptlets_for(url: &str) -> Option<String> {
+    if !enabled() || !url.starts_with("http") || allowed(url, &allow_list()) {
+        return None;
+    }
+    let script = engine()?.url_cosmetic_resources(url).injected_script;
+    (!script.trim().is_empty()).then_some(script)
 }
 
 /// A page wants to open a new window: whether it is an ad (pop-up rules of
@@ -259,6 +347,18 @@ fn percent_decode(text: &str) -> String {
 /// Base64 (standard or URL-safe, padding optional) into text; None if it
 /// is not base64 or not text.
 fn base64_decode(text: &str) -> Option<String> {
+    String::from_utf8(base64_bytes(text)?).ok()
+}
+
+/// A `data:` address (`data:mime;base64,...`): its type and content.
+pub fn data_url(url: &str) -> Option<(String, Vec<u8>)> {
+    let (head, body) = url.strip_prefix("data:")?.split_once(',')?;
+    let mime = head.strip_suffix(";base64")?;
+    Some((mime.to_string(), base64_bytes(body)?))
+}
+
+/// Base64 (standard or URL-safe, padding optional) into bytes.
+fn base64_bytes(text: &str) -> Option<Vec<u8>> {
     let mut out = Vec::new();
     let (mut acc, mut bits) = (0u32, 0);
     for c in text.trim_end_matches('=').bytes() {
@@ -277,7 +377,7 @@ fn base64_decode(text: &str) -> Option<String> {
             out.push((acc >> bits) as u8);
         }
     }
-    String::from_utf8(out).ok()
+    Some(out)
 }
 
 /// `cosmetic_css` with the app's settings.
@@ -340,8 +440,10 @@ pub fn start(wake: impl Fn() + Send + 'static) {
                     std::thread::sleep(Duration::from_secs(5));
                     continue;
                 }
-                // what was downloaded before: blocking starts right away
-                if engine().is_none() && last.is_some() {
+                // what was downloaded before: blocking starts right away;
+                // built again when the user's rules change
+                let rebuild = shared().rebuild.swap(false, Ordering::Relaxed);
+                if (engine().is_none() || rebuild) && last.is_some() {
                     build(&wake);
                 }
                 let due = last
@@ -367,7 +469,10 @@ pub fn start(wake: impl Fn() + Send + 'static) {
                 // short naps, to notice "update now" or "off" soon
                 for _ in 0..TICK.as_secs() / 5 {
                     std::thread::sleep(Duration::from_secs(5));
-                    if shared().refresh_now.load(Ordering::Relaxed) || !enabled() {
+                    if shared().refresh_now.load(Ordering::Relaxed)
+                        || shared().rebuild.load(Ordering::Relaxed)
+                        || !enabled()
+                    {
                         break;
                     }
                 }
@@ -420,15 +525,38 @@ fn build(wake: &dyn Fn()) {
     for (name, _) in LISTS {
         if let Ok(text) = std::fs::read_to_string(dir().join(format!("{name}.txt"))) {
             PopupRules::parse(&text, &mut popups);
-            set.add_filter_list(text, ParseOptions::default());
+            let options = ParseOptions {
+                permissions: if name.starts_with("ublock-") {
+                    TRUSTED
+                } else {
+                    PermissionMask::default()
+                },
+                ..Default::default()
+            };
+            set.add_filter_list(text, options);
         }
     }
     *shared().popups.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(popups);
-    let engine = Engine::new_with_filter_set(set);
+    // the user's rules
+    let mine = RULES.read().unwrap_or_else(|e| e.into_inner()).join("\n");
+    set.add_filter_list(
+        mine,
+        ParseOptions {
+            permissions: TRUSTED,
+            ..Default::default()
+        },
+    );
+    let mut engine = Engine::new_with_filter_set(set);
+    engine.use_resources(resources());
     let rules = engine_rules(&engine);
     *shared().engine.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(engine));
     set_status(|s| s.rules = rules);
     wake();
+}
+
+/// uBlock Origin's scriptlets and stand-ins.
+fn resources() -> Vec<Resource> {
+    serde_json::from_str(UBO_RESOURCES).unwrap_or_default()
 }
 
 /// The engine does not report its size: the lists' lines that are rules.
@@ -495,26 +623,35 @@ fn allowed(source: &str, allow: &[String]) -> bool {
     })
 }
 
-/// Whether a request of a page should be blocked (counts it when so).
+/// Whether a request of a page should be blocked.
 pub fn should_block(url: &str, source: &str, kind: Kind, allow: &[String]) -> bool {
+    verdict(url, source, kind, allow) != Verdict::Allow
+}
+
+/// What to do with a request of a page (counts it when blocked).
+pub fn verdict(url: &str, source: &str, kind: Kind, allow: &[String]) -> Verdict {
     // the page itself is never blocked here
     if kind == Kind::Document || !url.starts_with("http") {
-        return false;
+        return Verdict::Allow;
     }
     if allowed(source, allow) {
-        return false;
+        return Verdict::Allow;
     }
     let Some(engine) = engine() else {
-        return false;
+        return Verdict::Allow;
     };
     let Ok(request) = Request::new(url, source, kind.name(), "get") else {
-        return false;
+        return Verdict::Allow;
     };
-    let block = engine.check_network_request(&request).should_block();
-    if block {
-        shared().blocked.fetch_add(1, Ordering::Relaxed);
+    let result = engine.check_network_request(&request);
+    if !result.should_block() {
+        return Verdict::Allow;
     }
-    block
+    shared().blocked.fetch_add(1, Ordering::Relaxed);
+    match result.redirect {
+        Some(data) if data.starts_with("data:") => Verdict::Redirect(data),
+        _ => Verdict::Block,
+    }
 }
 
 /// CSS that hides the ad spots of a page: the page's own rules, and the
@@ -577,6 +714,59 @@ mod tests {
         let generic =
             engine.hidden_class_id_selectors(["ad-banner"], Vec::<&str>::new(), &res.exceptions);
         assert_eq!(generic, vec![".ad-banner".to_string()]);
+    }
+
+    #[test]
+    fn scriptlets_and_stand_ins() {
+        let mut set = FilterSet::new(false);
+        set.add_filter_list(
+            "game.example##+js(set-constant, adsBlocked, false)
+             ||ads.example/lib.js$script,redirect=noopjs
+             game.example##+js(trusted-set-cookie, a, b)"
+                .to_string(),
+            ParseOptions::default(),
+        );
+        let mut engine = Engine::new_with_filter_set(set);
+        let res = resources();
+        assert!(res.len() > 100, "uBlock's resources load");
+        engine.use_resources(res);
+        let script = engine
+            .url_cosmetic_resources("https://game.example/play")
+            .injected_script;
+        assert!(script.contains("adsBlocked"), "{script}");
+        // a trusted scriptlet from a list that is not trusted: left out
+        assert!(!script.contains("trusted-set-cookie") && !script.contains("trustedSetCookie"));
+        assert!(engine
+            .url_cosmetic_resources("https://other.example/")
+            .injected_script
+            .is_empty());
+        let req = Request::new(
+            "https://ads.example/lib.js",
+            "https://game.example/",
+            "script",
+            "get",
+        )
+        .unwrap();
+        let r = engine.check_network_request(&req);
+        assert!(r.should_block());
+        let (mime, body) = data_url(r.redirect.as_deref().unwrap()).unwrap();
+        assert_eq!(mime, "application/javascript");
+        assert!(String::from_utf8(body).unwrap().contains("function"));
+    }
+
+    #[test]
+    fn element_rules() {
+        assert_eq!(
+            element_rule("https://www.Game.example/play?x=1", " div.ad > iframe "),
+            Some("www.game.example##div.ad > iframe".to_string())
+        );
+        assert_eq!(element_rule("https://game.example/", ""), None);
+        assert_eq!(
+            element_rule("http://localhost:8765/x", "#ad"),
+            Some("localhost###ad".to_string())
+        );
+        assert_eq!(hostname("http://[::1]:80/"), "[::1]");
+        assert_eq!(element_rule("about:blank", "div"), None);
     }
 
     #[test]
