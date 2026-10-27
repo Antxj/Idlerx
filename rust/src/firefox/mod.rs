@@ -33,7 +33,7 @@ pub use window::Window;
 pub type Waker = Arc<dyn Fn() + Send + Sync>;
 
 /// Oldest Firefox that has everything Idlerx uses.
-pub const MIN_VERSION: u32 = 128;
+pub const MIN_VERSION: u32 = 140;
 /// A network's Firefox with no account left closes after this long.
 const IDLE_CLOSE: Duration = Duration::from_secs(20);
 /// How long an account's window may take to show up.

@@ -166,7 +166,7 @@ Right-click the account › **Record a macro** or **Macro…**
 
 Right-clicking an account or a group shows every option.
 
-**Requirements:** Windows 10 or 11 and Firefox 128 or newer. The interface
+**Requirements:** Windows 10 or 11 and Firefox 140 or newer. The interface
 is in English and Brazilian Portuguese, following the Windows language.
 
 ### Coming from Idlerx 0.x
