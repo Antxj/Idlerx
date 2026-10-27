@@ -1,6 +1,6 @@
 [package]
 name = "idlerx"
-version = "1.0.5"
+version = "0.10.4"
 edition = "2021"
 description = "Several isolated browser sessions (accounts) side by side in a single window"
 license = "GPL-3.0-or-later"
@@ -10,7 +10,9 @@ repository = "https://github.com/Antxj/Idlerx"
 eframe = { version = "0.36", default-features = false, features = ["wgpu_no_default_features", "default_fonts"] }
 # only the DirectX 12 backend: no Vulkan/OpenGL code in the executable
 wgpu = { version = "30", default-features = false, features = ["std", "wgsl", "dx12"] }
+webview2-com = "0.39"
 windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_Shell", "Win32_System_Com"] }
+windows-core = "0.62"
 raw-window-handle = "0.6"
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 serde = { version = "1", features = ["derive"] }
@@ -23,10 +25,10 @@ hmac = "0.13"
 sha1 = "0.11"
 base32 = "0.5"
 rfd = "0.17"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Globalization", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Networking_WinSock", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_NetworkManagement_NetManagement", "Win32_System_JobObjects", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Accessibility"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Networking_WinHttp", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_Globalization", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Pipes", "Win32_Storage_FileSystem", "Win32_Networking_WinSock", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_NetworkManagement_NetManagement", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi"] }
 tray-icon = "0.26"
 image = { version = "0.25", default-features = false, features = ["png"] }
-base64 = "0.22"
+adblock = { version = "0.13", default-features = false, features = ["embedded-domain-resolver", "full-regex-handling"] }
 
 [build-dependencies]
 embed-resource = "3"

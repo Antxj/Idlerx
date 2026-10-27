@@ -30,7 +30,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # MSVC: the C runtime is linked statically only with it
+      # MSVC: the WebView2 loader is linked statically only with it
       - name: Rust toolchain (MSVC)
         shell: pwsh
         run: |
@@ -46,39 +46,11 @@ jobs:
             throw "Tag $env:GITHUB_REF_NAME does not match version $versao in Cargo.toml."
           }
 
-      # Idlerx's Firefox extension, signed by Mozilla as an unlisted add-on
-      # (it is not on the add-ons site, it only goes inside Idlerx). Firefox
-      # only installs signed extensions. Its version follows Idlerx's.
-      - name: Sign the Firefox extension
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
-          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: |
-          if (-not $env:AMO_JWT_ISSUER -or -not $env:AMO_JWT_SECRET) {
-            throw "Missing the AMO_JWT_ISSUER / AMO_JWT_SECRET secrets (addons.mozilla.org API keys)."
-          }
-          $versao = (Select-String -Path rust/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
-          $manifest = "firefox/extension/manifest.json"
-          $text = (Get-Content $manifest -Raw) -replace '"version": "[^"]+"', "`"version`": `"$versao`""
-          [IO.File]::WriteAllText((Resolve-Path $manifest), $text)
-          npx --yes web-ext@8.3.0 sign --channel unlisted `
-            --source-dir firefox/extension --artifacts-dir ext-signed `
-            --api-key $env:AMO_JWT_ISSUER --api-secret $env:AMO_JWT_SECRET
-          if ($LASTEXITCODE -ne 0) { throw "Mozilla did not sign the extension." }
-          $xpi = Get-ChildItem ext-signed -Filter *.xpi | Select-Object -First 1
-          if (-not $xpi) { throw "No signed extension came back." }
-          Copy-Item $xpi.FullName rust/assets/idlerx-firefox.xpi
-
       # runs the tests, builds and checks the binary (the same script as the
-      # local build); a manual run (no tag) builds without the signed
-      # extension, only to test the build
+      # local build)
       - name: Release build
         shell: pwsh
-        run: |
-          if ($env:GITHUB_REF.StartsWith('refs/tags/')) { ./rust/build-release.ps1 }
-          else { ./rust/build-release.ps1 -AllowUnsigned }
+        run: ./rust/build-release.ps1
 
       - name: Assemble the files
         shell: pwsh

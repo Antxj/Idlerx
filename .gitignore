@@ -7,6 +7,3 @@ test-data/
 
 # official OpenVPN installer: downloaded and verified by build-release.ps1
 rust/assets/openvpn.msi
-
-# Idlerx's Firefox extension signed by Mozilla: made by the release workflow
-rust/assets/idlerx-firefox.xpi

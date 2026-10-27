@@ -16,28 +16,13 @@ Idlerx itself is licensed under the GNU General Public License v3.0 or later
 (see LICENSE). The executable includes the components below, each under its
 own license. All of them are compatible with the GPL-3.0.
 
-Mozilla Firefox
----------------
-Idlerx shows the pages with the Firefox installed on the computer, which is
-NOT redistributed with Idlerx (when it is missing, Idlerx offers to download
-the official installer from Mozilla, checking Mozilla's signature). Firefox
-is licensed under the Mozilla Public License 2.0:
-https://www.mozilla.org/MPL/2.0/
-"Firefox" is a trademark of the Mozilla Foundation. Idlerx is not produced,
-sponsored or endorsed by Mozilla.
-
-uBlock Origin
--------------
-Idlerx installs uBlock Origin (by Raymond Hill and contributors) in its own
-Firefox profiles, downloaded from Mozilla's add-ons site
-(https://addons.mozilla.org/firefox/addon/ublock-origin/) and signed by
-Mozilla. It is NOT embedded in the executable. uBlock Origin is licensed
-under the GNU General Public License v3.0: https://github.com/gorhill/uBlock
-
-Idlerx's Firefox extension
---------------------------
-The extension that connects Idlerx to its Firefox (firefox/extension in the
-repository) is part of Idlerx, under the same GPL-3.0-or-later license.
+Microsoft Edge WebView2
+-----------------------
+Idlerx shows the pages with the Microsoft Edge WebView2 Runtime, which is
+part of Windows (or installed from Microsoft) and is NOT redistributed with
+Idlerx. The WebView2 loader is linked into the executable through the
+webview2-com-sys crate, under the Microsoft WebView2 SDK license
+(BSD-3-Clause style): https://www.nuget.org/packages/Microsoft.Web.WebView2/License
 
 OpenVPN Community Edition
 -------------------------

@@ -147,9 +147,6 @@ pub struct Group {
     pub vpn: Option<GroupVpn>,
     /// Every account of the group is InPrivate (see `Account::in_private`).
     pub in_private: bool,
-    /// Color that marks the group and its accounts (index of the palette,
-    /// see `app::widgets::group_color`); None = no color.
-    pub color: Option<u8>,
 }
 
 impl Group {
@@ -267,8 +264,6 @@ pub struct Config {
     pub tray_hint_shown: bool,
     /// Profile folders still to be deleted (they were in use).
     pub pending_delete: Vec<String>,
-    /// The "Idlerx now uses Firefox" notice was shown.
-    pub firefox_intro_shown: bool,
 }
 
 impl Default for Config {
@@ -297,7 +292,6 @@ impl Default for Config {
             block_allow: Vec::new(),
             tray_hint_shown: false,
             pending_delete: Vec::new(),
-            firefox_intro_shown: false,
         }
     }
 }
@@ -401,6 +395,15 @@ impl Config {
                 .group_of(a)
                 .and_then(|g| self.group(g))
                 .is_some_and(|g| g.in_private)
+    }
+
+    /// Frames per second an account should draw at (0 = no limit).
+    pub fn fps_for(&self, a: &Account, selected: bool) -> u32 {
+        match a.fps {
+            Some(n) => n,
+            None if selected => self.fps_selected,
+            None => self.fps_limit,
+        }
     }
 
     /// Moves group `id` to the place of `target` (drag and drop).
@@ -517,6 +520,12 @@ pub fn shared_dir() -> PathBuf {
     profiles_dir().join("_shared")
 }
 
+/// Economy mode browser of a group with a VPN (its proxy is fixed for the
+/// whole browser, so it cannot be the shared one).
+pub fn vpn_shared_dir(group: &str) -> PathBuf {
+    profiles_dir().join(format!("_vpn_{group}"))
+}
+
 /// Every place an account's browser data can be: its own folder and its
 /// profile inside the shared browsers (economy mode, with and without VPN).
 fn profile_paths(profile: &str) -> Vec<PathBuf> {
@@ -585,6 +594,23 @@ pub fn delete_pending(cfg: &mut Config) {
         profile_paths(p)
             .iter()
             .any(|dir| dir.exists() && std::fs::remove_dir_all(dir).is_err())
+    });
+}
+
+/// Deletes a profile folder in the background: the browser of a closed
+/// account takes a moment to release the files.
+pub fn delete_profile_later(profile: String) {
+    std::thread::spawn(move || {
+        let dirs = profile_paths(&profile);
+        for _ in 0..20 {
+            let gone = dirs
+                .iter()
+                .all(|dir| !dir.exists() || std::fs::remove_dir_all(dir).is_ok());
+            if gone {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
     });
 }
 
@@ -739,7 +765,6 @@ mod tests {
             collapsed: false,
             vpn: None,
             in_private: false,
-            color: None,
         });
     }
 
@@ -808,6 +833,24 @@ mod tests {
         assert_eq!(ids(&c), ["b", "a", "c"]);
         c.move_group_by("c", 1); // already last
         assert_eq!(ids(&c), ["b", "a", "c"]);
+    }
+
+    #[test]
+    fn fps_per_account() {
+        let mut c = Config::default();
+        account_for_test(&mut c, "a", None);
+        let a = c.accounts[0].clone();
+        assert_eq!(c.fps_for(&a, true), 60); // selected: up to 60
+        c.fps_selected = 0;
+        assert_eq!(c.fps_for(&a, true), 0); // selected without limit
+        assert_eq!(c.fps_for(&a, false), 30);
+        c.fps_limit = 0;
+        assert_eq!(c.fps_for(&a, false), 0);
+        let mut b = a.clone();
+        b.fps = Some(5);
+        assert_eq!(c.fps_for(&b, true), 5); // fixed, even selected
+        b.fps = Some(0);
+        assert_eq!(c.fps_for(&b, false), 0);
     }
 
     #[test]

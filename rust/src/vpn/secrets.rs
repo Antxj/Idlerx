@@ -22,7 +22,7 @@ fn path() -> PathBuf {
     super::dir().join("secrets.dat")
 }
 
-pub(crate) fn dpapi(data: &[u8], protect: bool) -> Option<Vec<u8>> {
+fn dpapi(data: &[u8], protect: bool) -> Option<Vec<u8>> {
     let input = CRYPT_INTEGER_BLOB {
         cbData: data.len() as u32,
         pbData: data.as_ptr() as *mut u8,

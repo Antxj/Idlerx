@@ -34,17 +34,11 @@ impl App {
         }
         self.macro_runs
             .insert(id.to_string(), Run::new(Instant::now()));
-        if let Some(p) = self.panels.get(id) {
-            p.set_macro(true);
-        }
         self.note(id, "macro iniciada");
     }
 
     pub(super) fn stop_macro(&mut self, id: &str, why: &str) {
         if let Some(run) = self.macro_runs.remove(id) {
-            if let Some(p) = self.panels.get(id) {
-                p.set_macro(false);
-            }
             self.note(
                 id,
                 &format!("macro parada: {why} ({} rodada(s) completas)", run.rounds),
