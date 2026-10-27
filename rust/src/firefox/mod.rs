@@ -952,8 +952,12 @@ impl Engine {
                 }
             }
             "focus" => {
-                if let Some(p) = page {
-                    p.focused();
+                // a click in the page (Windows gives an embedded window
+                // neither the keyboard nor Firefox's activation for it)
+                if let Some(p) = page.filter(|p| p.focused()) {
+                    if let Some(w) = p.window.get() {
+                        w.take_keyboard();
+                    }
                 }
             }
             "captured" => {

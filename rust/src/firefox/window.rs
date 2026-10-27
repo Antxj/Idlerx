@@ -182,6 +182,13 @@ impl Window {
         self.post(wm::WM_SETFOCUS, 0, 0);
     }
 
+    /// The keyboard goes to the window (the user clicked in it), and it
+    /// becomes the active one of its Firefox.
+    pub fn take_keyboard(self) {
+        unsafe { SetFocus(self.h()) };
+        self.activate();
+    }
+
     /// Presses and releases a key (virtual key code, and its text if it
     /// types something).
     pub fn key(self, vk: u16, text: Option<&str>) {

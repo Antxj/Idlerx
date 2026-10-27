@@ -54,8 +54,21 @@
     lastFocus = now;
     browser.runtime.sendMessage({ t: 'focus' }).catch(() => {});
   };
-  window.addEventListener('mousedown', (e) => { if (e.isTrusted) focused(); }, true);
-  window.addEventListener('focus', focused, true);
+  // a field clicked while Firefox held another account's window active is
+  // focused once Idlerx makes this one active
+  let pressed = null;
+  window.addEventListener('mousedown', (e) => {
+    if (!e.isTrusted) return;
+    pressed = { el: e.composedPath()[0], at: Date.now() };
+    focused();
+  }, true);
+  window.addEventListener('focus', (e) => {
+    if (e.target === window && pressed && Date.now() - pressed.at < 1000) {
+      const el = pressed.el;
+      if (el instanceof HTMLElement && el.isConnected && el !== document.activeElement && el.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) el.focus();
+    }
+    focused();
+  }, true);
 
   if (!/^https?:$/.test(location.protocol)) return;
   const origin = location.origin;
