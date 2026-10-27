@@ -50,6 +50,18 @@ pub fn network(vpn: Option<&str>) -> String {
 /// called when the slot is filled.
 pub fn open(parent: isize, account: &Account, browser: Browser, wake: Wake) -> PanelSlot {
     let slot: PanelSlot = Rc::new(RefCell::new(None));
+    // tests (development builds): every account behind a test proxy, with
+    // the settings of a group with a VPN
+    let test_proxy: Option<u16> = cfg!(debug_assertions)
+        .then(|| std::env::var("IDLERX_TEST_PROXY").ok()?.parse().ok())
+        .flatten();
+    let browser = match test_proxy {
+        Some(port) => Browser {
+            vpn: Some(("test", port)),
+            ..browser
+        },
+        None => browser,
+    };
     let net = network(browser.vpn.map(|(g, _)| g));
     let spec = firefox::OpenSpec {
         id: account.id.clone(),

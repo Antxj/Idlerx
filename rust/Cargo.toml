@@ -1,6 +1,6 @@
 [package]
 name = "idlerx"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 description = "Several isolated browser sessions (accounts) side by side in a single window"
 license = "GPL-3.0-or-later"

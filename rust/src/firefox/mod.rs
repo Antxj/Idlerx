@@ -187,6 +187,7 @@ pub struct Engine {
     captures: HashMap<u64, Capture>,
     offers: Vec<LoginOffer>,
     generation: u64,
+    started_at: std::time::SystemTime,
 }
 
 thread_local! {
@@ -252,6 +253,7 @@ pub fn init(waker: Waker) -> Result<(), String> {
         captures: HashMap::new(),
         offers: Vec::new(),
         generation: 0,
+        started_at: std::time::SystemTime::now(),
     };
     ENGINE.with(|e| *e.borrow_mut() = Some(engine));
     Ok(())
@@ -569,14 +571,28 @@ impl Engine {
                     let gone = self.nets.get(&net).is_some_and(|n| n.connected);
                     if gone {
                         let closing = self.nets.get(&net).is_some_and(|n| n.closing);
-                        log(
-                            &net,
-                            if closing {
-                                "Firefox fechado (sem contas)"
-                            } else {
-                                "o Firefox fechou"
-                            },
-                        );
+                        if closing {
+                            log(&net, "Firefox fechado (sem contas)");
+                        } else {
+                            // what happened: the Firefox ended (how), or only
+                            // its link to Idlerx; a crash leaves a report
+                            let browser = self.nets.get(&net).and_then(|n| n.browser);
+                            let how = match browser.map(exit_code) {
+                                Some(None) => {
+                                    "a ligação com a extensão caiu (o Firefox continuava aberto)"
+                                        .to_string()
+                                }
+                                Some(Some(code)) => format!("o Firefox fechou (código {code:#x})"),
+                                None => "o Firefox fechou".to_string(),
+                            };
+                            let dump = new_crash_report(self.started_at);
+                            match dump {
+                                Some(d) => {
+                                    log(&net, &format!("{how}; relatório de travamento: {d}"))
+                                }
+                                None => log(&net, &how),
+                            }
+                        }
                         // whatever is left of that Firefox goes too: a new
                         // one needs its profile
                         if let Some(n) = self.nets.remove(&net) {
@@ -903,7 +919,9 @@ fn launch(
         .env(host::ENV_PORT, port.to_string())
         .env(host::ENV_TOKEN, token)
         .env(host::ENV_NET, net)
-        .env("MOZ_CRASHREPORTER_DISABLE", "1")
+        // a crash leaves a report in Idlerx's folder (no window, nothing sent)
+        .env("MOZ_CRASHREPORTER_NO_REPORT", "1")
+        .env("MOZ_CRASHREPORTER_DATA_DIRECTORY", crash_dir())
         .creation_flags(CREATE_SUSPENDED);
     let child = cmd.spawn().map_err(|e| e.to_string())?;
     let pid = child.id();
@@ -1045,6 +1063,49 @@ fn child_process(parent: u32) -> Option<u32> {
         windows_sys::Win32::Foundation::CloseHandle(snap);
         found
     }
+}
+
+/// Exit code of a process; None while it runs.
+fn exit_code(pid: u32) -> Option<u32> {
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+    const STILL_ACTIVE: u32 = 259;
+    unsafe {
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return Some(0);
+        }
+        let mut code = 0u32;
+        let ok = GetExitCodeProcess(h, &mut code);
+        windows_sys::Win32::Foundation::CloseHandle(h);
+        (ok != 0 && code != STILL_ACTIVE).then_some(code)
+    }
+}
+
+/// Where Idlerx's Firefox leaves its crash reports.
+fn crash_dir() -> PathBuf {
+    profile::root().join("crashes")
+}
+
+/// A crash report written since `since` (its file name).
+fn new_crash_report(since: std::time::SystemTime) -> Option<String> {
+    let mut newest = None;
+    let mut stack = vec![crash_dir()];
+    while let Some(dir) = stack.pop() {
+        for e in std::fs::read_dir(&dir).ok()?.flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|x| x == "dmp") {
+                let when = e.metadata().and_then(|m| m.modified()).ok();
+                if when.is_some_and(|w| w >= since) {
+                    newest = Some(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    newest
 }
 
 fn kill(pid: u32) {

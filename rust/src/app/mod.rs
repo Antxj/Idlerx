@@ -922,6 +922,16 @@ impl App {
                 id,
                 &format!("{what}; já recuperada 3 vezes em 10 min, deixada assim"),
             );
+            // closed, with the reason and an "Open" button (not a black page)
+            self.close_panel(id);
+            self.failed.insert(
+                id.to_string(),
+                tr!(
+                    "o Firefox da conta fechou 3 vezes seguidas (detalhes no registro das páginas)",
+                    "the account's Firefox closed 3 times in a row (details in the pages log)"
+                )
+                .to_string(),
+            );
             return;
         }
         times.push(Instant::now());
