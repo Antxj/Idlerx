@@ -274,8 +274,8 @@ pub struct Panel {
     /// Frames per second the page actually drew (measured inside it);
     /// None until known or when the page does not animate.
     fps_rate: Rc<Cell<Option<u32>>>,
-    /// "Keep awake" last sent with the frame limit.
-    awake_sent: Cell<Option<bool>>,
+    /// "Keep awake" and "quiet" last sent with the frame limit.
+    flags_sent: Cell<Option<(bool, bool)>>,
     failure: Rc<Cell<Option<Failure>>>,
     /// A new document started loading since the last call.
     loaded: Rc<Cell<bool>>,
@@ -468,7 +468,7 @@ impl Panel {
                 fps_sent: Cell::new(None),
                 fps_resend,
                 fps_rate: Rc::new(Cell::new(None)),
-                awake_sent: Cell::new(None),
+                flags_sent: Cell::new(None),
                 failure,
                 loaded,
                 recording,
@@ -537,18 +537,19 @@ impl Panel {
         }
     }
 
-    /// Frames per second the page may draw (0 = no limit). Only talks to
-    /// the page when the value changes or a new document loaded.
-    /// Frame limit, and `awake`: the game keeps running while the page is
-    /// hidden (see fps.js).
-    pub fn set_fps(&self, fps: u32, awake: bool) {
-        let same = self.fps_sent.get() == Some(fps) && self.awake_sent.get() == Some(awake);
+    /// Frames per second the page may draw (0 = no limit), `awake`: the
+    /// game keeps running while the page is hidden, and `quiet`: its sound
+    /// is stopped, not just silenced (see fps.js). Only talks to the page
+    /// when something changes or a new document loaded.
+    pub fn set_fps(&self, fps: u32, awake: bool, quiet: bool) {
+        let same =
+            self.fps_sent.get() == Some(fps) && self.flags_sent.get() == Some((awake, quiet));
         if !self.fps_resend.replace(false) && same {
             return;
         }
         self.fps_sent.set(Some(fps));
-        self.awake_sent.set(Some(awake));
-        let js = format!("window.__idlerxFps && window.__idlerxFps.set({fps}, {awake})");
+        self.flags_sent.set(Some((awake, quiet)));
+        let js = format!("window.__idlerxFps && window.__idlerxFps.set({fps}, {awake}, {quiet})");
         evaluate(&self.webview, &js, |_| {});
     }
 

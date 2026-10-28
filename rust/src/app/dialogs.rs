@@ -598,6 +598,21 @@ impl App {
                 .small()
                 .color(weak(dark)),
             );
+            ui.checkbox(
+                &mut self.cfg.quiet_muted,
+                tr!(
+                    "Contas sem som não processam o áudio",
+                    "Muted accounts don't process sound"
+                ),
+            );
+            ui.label(
+                RichText::new(tr!(
+                    "Com a conta muda, o som do jogo fica parado em vez de seguir tocando sem                      sair no alto-falante (cerca de 1% de um núcleo de CPU a menos por conta).                      Desligue se algum jogo mudar de comportamento quando está mudo.",
+                    "While an account is muted, the game's sound is stopped instead of playing                      on with nothing coming out (about 1% of a CPU core less per account). Turn                      it off if a game behaves differently while muted."
+                ))
+                .small()
+                .color(weak(dark)),
+            );
 
             ui.add_space(6.0);
             let label = |n: u32| {

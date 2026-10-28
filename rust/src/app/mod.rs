@@ -1053,12 +1053,14 @@ impl App {
     }
 
     /// Frame limit of each page: the selected account draws freely, the
-    /// others at the configured limit (or each account's own choice).
+    /// others at the configured limit (or each account's own choice). Muted
+    /// accounts also stop their sound work.
     fn apply_fps(&self) {
         for (id, p) in &self.panels {
             if let Some(a) = self.cfg.account(id) {
                 let selected = self.cfg.selected.as_deref() == Some(id.as_str());
-                p.set_fps(self.cfg.fps_for(a, selected), self.cfg.keep_active);
+                let quiet = a.muted && self.cfg.quiet_muted;
+                p.set_fps(self.cfg.fps_for(a, selected), self.cfg.keep_active, quiet);
             }
         }
     }

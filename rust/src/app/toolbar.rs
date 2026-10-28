@@ -122,11 +122,10 @@ impl App {
                 if let Some(a) = &account {
                     let id = a.id.clone();
                     if let Some(p) = self.panels.get(&id).filter(|_| self.cfg.block_ads) {
-                        let resp = ui.add(egui::Button::new("🛡").frame(false)).bar_tip(tr!(
-                            "Bloqueio de anúncios desta conta",
-                            "Ad blocking of this account"
-                        ));
                         let (blocked, url) = (p.blocked(), p.url());
+                        let resp = ui
+                            .add(egui::Button::new("🛡").frame(false))
+                            .bar_tip(blocker_tip(blocked, url.as_deref()));
                         egui::Popup::menu(&resp).show(|ui| {
                             blocker_menu(ui, &id, blocked, url.as_deref(), actions);
                         });

@@ -246,6 +246,9 @@ pub struct Config {
     pub keep_active: bool,
     /// Economy mode: one shared browser, one profile per account.
     pub economy: bool,
+    /// Muted accounts stop their sound work instead of only silencing it
+    /// (see fps.js).
+    pub quiet_muted: bool,
     /// The browser offers to save logins and fills them in (per account,
     /// encrypted by Windows, no sync).
     pub save_passwords: bool,
@@ -288,6 +291,7 @@ impl Default for Config {
             restore_open: true,
             keep_active: true,
             economy: true,
+            quiet_muted: true,
             save_passwords: true,
             fps_limit: 30,
             fps_selected: 60,
@@ -883,6 +887,7 @@ mod tests {
         assert_eq!(c.accounts[0].zoom, 1.0);
         assert!(c.accounts[0].in_grid);
         assert!(c.check_updates && c.restore_open && c.keep_active && c.economy);
+        assert!(c.quiet_muted);
         assert!(c.save_passwords);
         assert_eq!(c.fps_limit, 30);
         assert_eq!(c.accounts[0].fps, None);

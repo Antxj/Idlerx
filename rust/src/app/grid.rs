@@ -361,10 +361,10 @@ impl App {
                 Vec2::new(24.0, rect.height() - 4.0),
             );
             x -= 26.0;
+            let (blocked, url) = (p.blocked(), p.url());
             let resp = ui
                 .place(r, egui::Button::new("🛡").frame(false))
-                .bar_tip(tr!("Bloqueio de anúncios", "Ad blocking"));
-            let (blocked, url) = (p.blocked(), p.url());
+                .bar_tip(blocker_tip(blocked, url.as_deref()));
             egui::Popup::menu(&resp).show(|ui| {
                 blocker_menu(ui, &a.id, blocked, url.as_deref(), actions);
             });

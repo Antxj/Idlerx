@@ -369,6 +369,23 @@ pub(super) fn group_color(i: u8) -> Color32 {
     GROUP_COLORS[i as usize % GROUP_COLORS.len()]
 }
 
+/// Tooltip of an account's 🛡 button: what was blocked there.
+pub(super) fn blocker_tip(blocked: u64, url: Option<&str>) -> String {
+    if url.is_some_and(crate::blocker::site_allowed) {
+        trf!(
+            "Bloqueio de anúncios: {} bloqueados (desligado neste site)",
+            "Ad blocking: {} blocked (off on this site)",
+            blocked
+        )
+    } else {
+        trf!(
+            "Bloqueio de anúncios: {} bloqueados nesta conta",
+            "Ad blocking: {} blocked in this account",
+            blocked
+        )
+    }
+}
+
 /// The ad blocker's menu of an account (its 🛡 button): what it blocked
 /// there, "Block element", and blocking on or off for the page's site.
 pub(super) fn blocker_menu(
