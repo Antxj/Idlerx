@@ -607,8 +607,12 @@ impl App {
             );
             ui.label(
                 RichText::new(tr!(
-                    "Com a conta muda, o som do jogo fica parado em vez de seguir tocando sem                      sair no alto-falante (cerca de 1% de um núcleo de CPU a menos por conta).                      Desligue se algum jogo mudar de comportamento quando está mudo.",
-                    "While an account is muted, the game's sound is stopped instead of playing                      on with nothing coming out (about 1% of a CPU core less per account). Turn                      it off if a game behaves differently while muted."
+                    "Com a conta muda, o som do jogo fica parado em vez de seguir tocando sem \
+                     sair no alto-falante (cerca de 1% de um núcleo de CPU a menos por conta). \
+                     Desligue se algum jogo mudar de comportamento quando está mudo.",
+                    "While an account is muted, the game's sound is stopped instead of playing \
+                     on with nothing coming out (about 1% of a CPU core less per account). Turn \
+                     it off if a game behaves differently while muted."
                 ))
                 .small()
                 .color(weak(dark)),
@@ -976,8 +980,12 @@ impl App {
             tr!("Bloquear anúncios e rastreadores", "Block ads and trackers"),
         )
         .on_hover_text(tr!(
-            "Com o motor do navegador Brave e as listas que o uBlock Origin usa: filtros do              uBlock, EasyList, EasyPrivacy e a lista de Peter Lowe. Vale para todas as contas,              inclusive InPrivate. Ligar ou desligar vale para as contas abertas depois.",
-            "With the Brave browser's engine and the lists uBlock Origin uses: uBlock filters,              EasyList, EasyPrivacy and Peter Lowe's list. Applies to every account, InPrivate              included. Turning it on or off applies to accounts opened afterwards."
+            "Com o motor do navegador Brave e as listas que o uBlock Origin usa: filtros do \
+             uBlock, EasyList, EasyPrivacy e a lista de Peter Lowe. Vale para todas as contas, \
+             inclusive InPrivate. Ligar ou desligar vale para as contas abertas depois.",
+            "With the Brave browser's engine and the lists uBlock Origin uses: uBlock filters, \
+             EasyList, EasyPrivacy and Peter Lowe's list. Applies to every account, InPrivate \
+             included. Turning it on or off applies to accounts opened afterwards."
         ));
         if !self.cfg.block_ads {
             return;

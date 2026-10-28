@@ -20,6 +20,7 @@ pub struct Account {
     /// Last visited address, reopened on the next start.
     pub last_url: Option<String>,
     pub favorite: bool,
+    /// New accounts start muted (idle games play on their own).
     pub muted: bool,
     pub zoom: f64,
     /// Shown in the grid layout.
@@ -48,7 +49,7 @@ impl Default for Account {
             url: String::new(),
             last_url: None,
             favorite: false,
-            muted: false,
+            muted: true,
             zoom: 1.0,
             in_grid: true,
             open: false,
@@ -893,6 +894,10 @@ mod tests {
         assert_eq!(c.accounts[0].fps, None);
         let a = &c.accounts[0];
         assert_eq!(a.start_url(), "https://a.com");
+        // new accounts start muted; saved ones keep their sound
+        assert!(Account::new("N".into(), "https://a.com".into()).muted);
+        let c: Config = serde_json::from_str(r#"{"accounts":[{"id":"x","muted":false}]}"#).unwrap();
+        assert!(!c.accounts[0].muted);
     }
 
     #[test]

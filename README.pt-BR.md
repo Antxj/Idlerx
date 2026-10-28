@@ -161,8 +161,9 @@ Configurações › **Bloquear anúncios e rastreadores**.
   menos memória, mas o jogo continua: timers sem desaceleração e o loop do
   jogo rodando a 5 quadros por segundo. Minimizado, o Idlerx gasta cerca de
   dez vezes menos CPU.
-- **Mudo, sem gasto com som**: o som de uma conta muda fica parado, não só
-  silenciado, e não custa nada (a música volta quando você tira o mudo).
+- **Mudo, sem gasto com som**: contas novas já começam mudas, e o som de uma
+  conta muda fica parado, não só silenciado, e não custa nada (a música volta
+  quando você tira o mudo).
 - **Bandeja do sistema**: o X manda para a bandeja e os jogos seguem. O
   ícone fica com um ponto vermelho se a VPN de um grupo cair, e o Windows
   avisa quando cai e quando volta.

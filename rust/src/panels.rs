@@ -1176,7 +1176,11 @@ pub(crate) unsafe fn watch_requests(
             return Ok(());
         }
         let page = sender.clone();
-        let collect = "(() => { const c = new Set(), i = new Set();             for (const e of document.querySelectorAll('[class],[id]')) {               if (e.id) i.add(e.id); for (const k of e.classList) c.add(k);               if (c.size + i.size > 8000) break; }             return { c: [...c], i: [...i] }; })()";
+        let collect = "(() => { const c = new Set(), i = new Set(); \
+            for (const e of document.querySelectorAll('[class],[id]')) { \
+              if (e.id) i.add(e.id); for (const k of e.classList) c.add(k); \
+              if (c.size + i.size > 8000) break; } \
+            return { c: [...c], i: [...i] }; })()";
         evaluate(&sender, collect, move |v| {
             let v = v.unwrap_or_default();
             let list = |k: &str| -> Vec<String> {
@@ -1190,7 +1194,8 @@ pub(crate) unsafe fn watch_requests(
             };
             if let Some(css) = crate::blocker::css_for(&source, &list("c"), &list("i")) {
                 let js = format!(
-                    "(() => {{ const s = document.createElement('style'); s.textContent = {};                      (document.head || document.documentElement).appendChild(s); }})()",
+                    "(() => {{ const s = document.createElement('style'); s.textContent = {}; \
+                     (document.head || document.documentElement).appendChild(s); }})()",
                     serde_json::Value::String(css)
                 );
                 evaluate(&page, &js, |_| {});

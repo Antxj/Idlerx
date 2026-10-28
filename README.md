@@ -160,8 +160,9 @@ Settings › **Block ads and trackers**.
   memory, but the game keeps going: timers at full speed and the game loop
   running at 5 frames per second. Minimized, Idlerx uses about ten times
   less CPU.
-- **Muted, no sound work**: a muted account's sound is stopped, not just
-  silenced, so it costs nothing (music comes back when you unmute).
+- **Muted, no sound work**: new accounts start muted, and a muted account's
+  sound is stopped, not just silenced, so it costs nothing (music comes back
+  when you unmute).
 - **System tray**: the X sends it to the tray and the games keep going. The
   icon gets a red dot if a group's VPN drops, and Windows tells you when it
   drops and when it is back.
