@@ -790,7 +790,7 @@ impl App {
             }
         }
         // the arrow collapses/expands; the rest shows the group in the grid
-        // (a second click shows every account again)
+        // (every account again: the grid's menu in the top bar)
         let on_arrow = resp
             .interact_pointer_pos()
             .is_some_and(|p| p.x < rect.left() + 24.0);
@@ -798,11 +798,7 @@ impl App {
             if on_arrow {
                 actions.push(Action::ToggleCollapse(g.id.clone()));
             } else {
-                actions.push(Action::GridGroup(if showing {
-                    None
-                } else {
-                    Some(g.id.clone())
-                }));
+                actions.push(Action::GridGroup(Some(g.id.clone())));
             }
         }
 
@@ -816,10 +812,10 @@ impl App {
         let vpn_tip = badge.map(|(_, t)| format!("{t}\n\n")).unwrap_or_default();
         let tip = trf!(
             "{vpn_tip}{} conta(s) · {open} aberta(s)\nCPU {cpu:.0}% · RAM {}\n\nClique para mostrar só este grupo na grade \
-             (de novo: todas). A seta recolhe/expande. Arraste para mudar a ordem; \
+             (todas as contas: menu da grade, na barra de cima). A seta recolhe/expande. Arraste para mudar a ordem; \
              solte contas aqui para colocá-las no grupo.",
             "{vpn_tip}{} account(s) · {open} open\nCPU {cpu:.0}% · RAM {}\n\nClick to show only this group in the grid \
-             (again: all). The arrow collapses/expands. Drag to reorder; drop \
+             (all accounts: the grid's menu in the top bar). The arrow collapses/expands. Drag to reorder; drop \
              accounts here to put them in the group.",
             ids.len(),
             metrics::fmt_memory(mem)
